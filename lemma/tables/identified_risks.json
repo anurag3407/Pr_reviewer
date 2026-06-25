@@ -1,0 +1,15 @@
+{
+  "name": "identified_risks",
+  "enable_rls": false,
+  "columns": [
+    { "name": "pr_id", "type": "TEXT", "required": true, "description": "pull_requests.id (join key, stored as text)" },
+    { "name": "attempt", "type": "INTEGER", "description": "which retry surfaced this risk" },
+    { "name": "severity", "type": "TEXT", "description": "LOW | MEDIUM | HIGH | CRITICAL" },
+    { "name": "category", "type": "TEXT", "description": "BUG | COMPLIANCE | TEST_FAILURE | SECURITY" },
+    { "name": "title", "type": "TEXT", "required": true, "description": "short label (Risk Matrix cell)" },
+    { "name": "detail", "type": "TEXT", "description": "failing step / root-cause hypothesis" },
+    { "name": "recommended_fix", "type": "TEXT", "description": "from the TestSprite bundle / Claude" },
+    { "name": "source", "type": "TEXT", "description": "testsprite | npm-test | mock" },
+    { "name": "status", "type": "TEXT", "default": "OPEN", "description": "OPEN | FIXED | WONT_FIX" }
+  ]
+}

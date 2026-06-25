@@ -1,0 +1,28 @@
+{
+  "name": "pull_requests",
+  "enable_rls": false,
+  "columns": [
+    { "name": "pr_number", "type": "TEXT", "description": "GitHub PR number / id" },
+    { "name": "repo", "type": "TEXT", "description": "owner/name" },
+    { "name": "branch", "type": "TEXT", "required": true, "description": "head branch" },
+    { "name": "author", "type": "TEXT", "description": "PR author" },
+    { "name": "title", "type": "TEXT", "description": "PR title" },
+    {
+      "name": "status",
+      "type": "TEXT",
+      "required": true,
+      "default": "PENDING",
+      "description": "PENDING | TESTING | HEALING | READY_FOR_MERGE | AWAITING_HUMAN_APPROVAL | APPROVED_OVERRIDE | REJECTED"
+    },
+    {
+      "name": "retry_count",
+      "type": "INTEGER",
+      "required": true,
+      "default": 0,
+      "description": "the auto-healing loop counter (0..5)"
+    },
+    { "name": "preview_url", "type": "TEXT", "description": "public URL TestSprite tests against" },
+    { "name": "testsprite_test_id", "type": "TEXT", "description": "created TestSprite test id" },
+    { "name": "last_error", "type": "TEXT", "description": "summary of the latest failure" }
+  ]
+}
