@@ -11,11 +11,12 @@
  * observes progress just by polling. Launched fire-and-forget from the webhook.
  */
 
+import { reviewRisks } from "./agents/risk-reviewer";
 import { generateFix } from "./fixer";
 import { pushFix } from "./git";
 import { addRisk, getPR, incrementRetry, updatePR } from "./lemma";
 import { runTests } from "./tester";
-import { MAX_RETRIES, type PRStatus } from "./types";
+import { MAX_RETRIES, type PRStatus, type PullRequestContext } from "./types";
 
 const STEP_DELAY_MS = Number(process.env.LOOP_STEP_DELAY_MS ?? 1200);
 
@@ -77,6 +78,40 @@ export async function runHealingLoop(prId: string): Promise<void> {
     await updatePR(prId, {
       status: "AWAITING_HUMAN_APPROVAL",
       last_error: `loop error: ${(error as Error).message}`,
+    }).catch(() => {});
+  } finally {
+    running.delete(prId);
+  }
+}
+
+// ── v2: the review path (analyzes the REAL diff) ─────────────────────────────
+// Unlike runHealingLoop (mock test→fix→retry), this reads the actual PR diff via
+// the risk-reviewer agent, writes the surfaced risks, and parks the PR for a
+// human when anything serious shows up. Statuses are reused so the existing
+// dashboard renders it unchanged:
+//   in-progress → TESTING ; blocker (CRITICAL/HIGH) → AWAITING_HUMAN_APPROVAL ;
+//   otherwise → READY_FOR_MERGE.
+// Phase 2: this becomes a Lemma workflow run.
+export async function runReview(prId: string, ctx: PullRequestContext): Promise<void> {
+  if (running.has(prId)) return;
+  running.add(prId);
+  try {
+    await updatePR(prId, { status: "TESTING", last_error: null });
+
+    const risks = await reviewRisks(ctx);
+    for (const risk of risks) {
+      await addRisk({ ...risk, pr_id: prId, attempt: 1 });
+    }
+
+    const blocker = risks.find((r) => r.severity === "CRITICAL" || r.severity === "HIGH");
+    await updatePR(prId, {
+      status: blocker ? "AWAITING_HUMAN_APPROVAL" : "READY_FOR_MERGE",
+      last_error: blocker ? blocker.title : null,
+    });
+  } catch (error) {
+    await updatePR(prId, {
+      status: "AWAITING_HUMAN_APPROVAL",
+      last_error: `review error: ${(error as Error).message}`,
     }).catch(() => {});
   } finally {
     running.delete(prId);

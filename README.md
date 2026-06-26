@@ -54,6 +54,48 @@ npm run simulate                     # in another → reaches 5/5 → AWAITING_H
 #   then click "Approve release" on the card.
 ```
 
+## Real GitHub PRs (v2)
+
+The mock/`simulate` path needs zero GitHub setup. To review **real** PRs, get a
+token and pick one of two delivery models. The seam is `lib/github.ts`
+(`fetchPRContext` / `postPRComment`); `GITHUB_MODE=mock` (or no token) reads
+`fixtures/sample-pr.json` so everything still runs offline.
+
+**1. Create a token.** A fine-grained PAT at
+<https://github.com/settings/personal-access-tokens> with **Pull requests:
+Read+Write** and **Contents: Read** on the target repo. Put it in `.env.local`:
+
+```bash
+GITHUB_MODE=real
+GITHUB_TOKEN=github_pat_xxx
+```
+
+**2a. On-demand (pull model — easiest, no tunnel).** Just POST a PR:
+
+```bash
+curl -X POST http://localhost:3000/api/review \
+  -H 'content-type: application/json' \
+  -d '{"url":"https://github.com/owner/name/pull/42"}'
+# or: -d '{"repo":"owner/name","number":42}'
+```
+
+The app fetches the live diff + files + commits, records the PR, and starts
+processing. Watch the dashboard.
+
+**2b. Webhook (push model — auto on every PR).** Expose localhost and register a
+webhook so opening/syncing a PR triggers a review:
+
+```bash
+# expose localhost (no signup):
+npx smee-client --url https://smee.io/<your-channel> \
+  --target http://localhost:3000/api/webhooks/github
+```
+
+Then in the repo: **Settings → Webhooks → Add webhook** → Payload URL = your
+smee URL, Content type = `application/json`, Secret = `GITHUB_WEBHOOK_SECRET`
+(set the same value in `.env.local`), events = **Pull requests**. The webhook
+verifies the HMAC, fetches the real diff, and launches the loop.
+
 ## How state lives in Lemma
 
 Two tables (schemas in `lemma/tables/*.json`, mirrored in `lib/types.ts`):
@@ -88,8 +130,11 @@ The dashboard never holds the token: it polls server **route handlers**
 | `TESTSPRITE_API_KEY`, `TESTSPRITE_TEST_ID` | — | real TestSprite path (needs a public preview URL) |
 | `ANTHROPIC_API_KEY` | — | unset → fixer uses a deterministic mock |
 | `FIXER_MODEL` | `claude-opus-4-8` | Claude model for fix generation |
-| `GIT_MODE` | `mock` | `mock` · `real` (real only touches `GIT_REPO_DIR`) |
+| `GITHUB_MODE` | `mock` | `real` · `mock` (mock reads `fixtures/sample-pr.json`) |
+| `GITHUB_TOKEN` | — | fine-grained PAT (PRs r/w, Contents r) for real ingestion |
 | `GITHUB_WEBHOOK_SECRET` | — | verifies the inbound HMAC when set |
+| `SLACK_WEBHOOK_URL` | — | optional outbound review notification |
+| `GIT_MODE` | `mock` | legacy v1 auto-heal push (`mock` · `real`) |
 | `LOOP_STEP_DELAY_MS` | `1200` | pause between heals so transitions are visible |
 
 ## The three pluggable adapters

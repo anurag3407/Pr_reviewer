@@ -12,9 +12,10 @@
 
 import crypto from "node:crypto";
 import { NextResponse } from "next/server";
+import { fetchPRContext } from "@/lib/github";
 import { createPR } from "@/lib/lemma";
-import { runHealingLoop } from "@/lib/orchestrator";
-import type { NewPR } from "@/lib/types";
+import { runHealingLoop, runReview } from "@/lib/orchestrator";
+import type { NewPR, PullRequestContext } from "@/lib/types";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -64,9 +65,34 @@ export async function POST(request: Request) {
     return NextResponse.json({ ignored: action }, { status: 202 });
   }
 
+  // Start from the webhook payload, then best-effort enrich with the live PR
+  // (real diff + files + commits). A fetch failure must never drop the event.
+  let newPR: NewPR = parsePayload(body);
+  let ctx: PullRequestContext | null = null;
+  const repo = newPR.repo;
+  const number = Number(newPR.pr_number);
+  if (repo && repo !== "demo/repo" && Number.isFinite(number)) {
+    try {
+      ctx = await fetchPRContext(repo, number);
+      newPR = {
+        pr_number: String(ctx.number),
+        repo: ctx.repo,
+        branch: ctx.branch,
+        author: ctx.author,
+        title: ctx.title,
+      };
+      console.log(
+        `[webhook] enriched ${ctx.repo}#${ctx.number}: ${ctx.files.length} files, ` +
+          `${ctx.commits.length} commits, ${ctx.diff.length}-byte diff (source=${ctx.source})`,
+      );
+    } catch (error) {
+      console.warn(`[webhook] context fetch failed, using payload only: ${(error as Error).message}`);
+    }
+  }
+
   let prId: string;
   try {
-    const pr = await createPR(parsePayload(body));
+    const pr = await createPR(newPR);
     prId = pr.id;
   } catch (error) {
     return NextResponse.json(
@@ -75,10 +101,13 @@ export async function POST(request: Request) {
     );
   }
 
-  // Fire-and-forget: the loop drives state in the pod; the response returns now.
+  // Fire-and-forget: state is driven in the pod; the response returns now.
   // (Caveat: serverless platforms may cut off background work — fine for
   // `next dev` / a long-running Node host during the demo.)
-  void runHealingLoop(prId);
+  // With a real diff in hand → review it; otherwise fall back to the v1 loop
+  // (e.g. the simulate-pr script, which sends no fetchable PR).
+  if (ctx) void runReview(prId, ctx);
+  else void runHealingLoop(prId);
 
   return NextResponse.json({ ok: true, pr_id: prId }, { status: 202 });
 }

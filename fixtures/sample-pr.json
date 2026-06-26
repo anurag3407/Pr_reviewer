@@ -1,0 +1,39 @@
+{
+  "repo": "acme/checkout",
+  "number": 142,
+  "title": "Apply coupon discount at checkout",
+  "author": "daniela",
+  "branch": "feature/apply-coupon",
+  "baseBranch": "main",
+  "body": "Adds coupon support to the checkout total. Closes #118.\n\n- Reads the coupon code from the cart\n- Applies a percentage discount before tax\n- Adds a coupon input to the checkout form",
+  "source": "mock",
+  "diff": "diff --git a/src/checkout/total.ts b/src/checkout/total.ts\n--- a/src/checkout/total.ts\n+++ b/src/checkout/total.ts\n@@ -10,6 +10,11 @@ export function computeTotal(cart: Cart): number {\n   let subtotal = 0;\n   for (const item of cart.items) {\n     subtotal += item.price * item.quantity;\n   }\n+  if (cart.coupon) {\n+    // BUG: discount applied AFTER tax instead of before\n+    subtotal = subtotal * (1 - cart.coupon.percent / 100);\n+  }\n   const tax = subtotal * TAX_RATE;\n   return subtotal + tax;\n }\ndiff --git a/src/config/payments.ts b/src/config/payments.ts\n--- a/src/config/payments.ts\n+++ b/src/config/payments.ts\n@@ -1,3 +1,4 @@\n export const TAX_RATE = 0.08;\n+export const STRIPE_KEY = \"sk_live_EXAMPLE_PLACEHOLDER_not_a_real_key\";\ndiff --git a/src/components/CouponField.tsx b/src/components/CouponField.tsx\n--- a/src/components/CouponField.tsx\n+++ b/src/components/CouponField.tsx\n@@ -0,0 +1,8 @@\n+export function CouponField() {\n+  return (\n+    <div>\n+      <input id=\"coupon\" type=\"text\" placeholder=\"Coupon code\" />\n+    </div>\n+  );\n+}",
+  "files": [
+    {
+      "filename": "src/checkout/total.ts",
+      "status": "modified",
+      "additions": 5,
+      "deletions": 0,
+      "patch": "@@ -10,6 +10,11 @@ export function computeTotal(cart: Cart): number {\n   let subtotal = 0;\n   for (const item of cart.items) {\n     subtotal += item.price * item.quantity;\n   }\n+  if (cart.coupon) {\n+    subtotal = subtotal * (1 - cart.coupon.percent / 100);\n+  }\n   const tax = subtotal * TAX_RATE;\n   return subtotal + tax;\n }"
+    },
+    {
+      "filename": "src/config/payments.ts",
+      "status": "modified",
+      "additions": 1,
+      "deletions": 0,
+      "patch": "@@ -1,3 +1,4 @@\n export const TAX_RATE = 0.08;\n+export const STRIPE_KEY = \"sk_live_EXAMPLE_PLACEHOLDER_not_a_real_key\";"
+    },
+    {
+      "filename": "src/components/CouponField.tsx",
+      "status": "added",
+      "additions": 8,
+      "deletions": 0,
+      "patch": "@@ -0,0 +1,8 @@\n+export function CouponField() {\n+  return (\n+    <div>\n+      <input id=\"coupon\" type=\"text\" placeholder=\"Coupon code\" />\n+    </div>\n+  );\n+}"
+    }
+  ],
+  "commits": [
+    { "sha": "a1b2c3d4e5f6", "message": "Add coupon percentage to cart model", "author": "daniela" },
+    { "sha": "b2c3d4e5f6a7", "message": "Apply coupon in computeTotal", "author": "daniela" },
+    { "sha": "c3d4e5f6a7b8", "message": "Add CouponField component", "author": "daniela" }
+  ]
+}

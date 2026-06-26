@@ -102,3 +102,39 @@ export interface NewRisk {
 export interface PRWithRisks extends PullRequest {
   risks: IdentifiedRisk[];
 }
+
+// ── GitHub ingestion (v2) ───────────────────────────────────────────────────
+// The normalized PR context the reviewers consume. Produced by lib/github.ts
+// (real GitHub REST in Phase 1; a Lemma connector op in Phase 2). Every agent
+// seam takes this shape so the source of the diff never leaks into the agents.
+
+/** One changed file in a PR diff. */
+export interface ChangedFile {
+  filename: string;
+  status: string; // added | modified | removed | renamed
+  additions: number;
+  deletions: number;
+  patch?: string; // the per-file unified diff hunk (omitted for binary/large files)
+}
+
+/** One commit on the PR branch (feeds release notes). */
+export interface PRCommit {
+  sha: string;
+  message: string;
+  author: string;
+}
+
+/** Everything the reviewers need about a PR — the single input to every agent. */
+export interface PullRequestContext {
+  repo: string; // owner/name
+  number: number;
+  title: string;
+  author: string;
+  branch: string; // head ref
+  baseBranch: string; // base ref
+  body: string; // PR description
+  diff: string; // full unified diff
+  files: ChangedFile[];
+  commits: PRCommit[];
+  source: "github" | "mock";
+}
