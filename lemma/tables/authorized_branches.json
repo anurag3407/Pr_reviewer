@@ -1,0 +1,9 @@
+{
+  "name": "authorized_branches",
+  "enable_rls": false,
+  "columns": [
+    { "name": "repo", "type": "TEXT", "required": true, "description": "Repository name (owner/repo)" },
+    { "name": "branch", "type": "TEXT", "required": true, "description": "Branch name (e.g. main)" },
+    { "name": "user_id", "type": "TEXT", "description": "Clerk User ID" }
+  ]
+}

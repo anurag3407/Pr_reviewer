@@ -102,3 +102,17 @@ export interface NewRisk {
 export interface PRWithRisks extends PullRequest {
   risks: IdentifiedRisk[];
 }
+
+export interface AuthorizedBranch {
+  id: string;
+  repo: string;
+  branch: string;
+  user_id: string | null;
+  created_at?: string;
+}
+
+export interface NewAuthorizedBranch {
+  repo: string;
+  branch: string;
+  user_id?: string | null;
+}

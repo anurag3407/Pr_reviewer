@@ -28,12 +28,14 @@ import type {
   PRWithRisks,
   PRStatus,
   PullRequest,
+  AuthorizedBranch,
+  NewAuthorizedBranch,
 } from "./types";
 
 const API_URL = process.env.LEMMA_API_URL ?? "https://api.lemma.work";
 const AUTH_URL = process.env.LEMMA_AUTH_URL ?? "https://lemma.work/auth";
 
-export const TABLES = { prs: "pull_requests", risks: "identified_risks" } as const;
+export const TABLES = { prs: "pull_requests", risks: "identified_risks", branches: "authorized_branches" } as const;
 
 /** Force the SDK into headless bearer-token mode (see file header). */
 class TokenAuth extends AuthManager {
@@ -147,6 +149,16 @@ function toRisk(row: Row): IdentifiedRisk {
   };
 }
 
+function toBranch(row: Row): AuthorizedBranch {
+  return {
+    id: String(row.id),
+    repo: String(row.repo ?? ""),
+    branch: String(row.branch ?? ""),
+    user_id: nullableStr(row.user_id),
+    created_at: row.created_at as string | undefined,
+  };
+}
+
 // ── pull_requests CRUD ──────────────────────────────────────────────────────
 export async function createPR(input: NewPR): Promise<PullRequest> {
   const row = await lemma().records.create(TABLES.prs, {
@@ -243,4 +255,22 @@ export async function createTable(payload: unknown): Promise<void> {
   // The JSON payloads use real default values; the generated `ColumnSchema.default`
   // type is narrowed to `null`, so cast at this boundary.
   await lemma().tables.create(payload as Parameters<LemmaClient["tables"]["create"]>[0]);
+}
+
+// ── authorized_branches CRUD ────────────────────────────────────────────────
+export async function addAuthorizedBranch(input: NewAuthorizedBranch): Promise<AuthorizedBranch> {
+  const row = await lemma().records.create(TABLES.branches, {
+    repo: input.repo,
+    branch: input.branch,
+    user_id: input.user_id ?? null,
+  });
+  return toBranch(row as Row);
+}
+
+export async function listAuthorizedBranches(): Promise<AuthorizedBranch[]> {
+  const res = await lemma().records.list(TABLES.branches, {
+    limit: 200,
+    sort: [{ field: "created_at", direction: "desc" }],
+  });
+  return (res.items ?? []).map((r) => toBranch(r as Row));
 }

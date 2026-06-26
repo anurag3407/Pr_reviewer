@@ -1,3 +1,7 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
 /* ============================================================================
    AUTOHEAL — operator console
    An ops/mission-control surface for an autonomous PR-healing agent.

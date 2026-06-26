@@ -14,7 +14,7 @@ import { createTable, lemmaConfig, listTableNames } from "../lib/lemma";
 
 const HERE = dirname(fileURLToPath(import.meta.url));
 const TABLES_DIR = join(HERE, "..", "lemma", "tables");
-const TABLE_NAMES = ["pull_requests", "identified_risks"] as const;
+const TABLE_NAMES = ["pull_requests", "identified_risks", "authorized_branches"] as const;
 
 async function main(): Promise<void> {
   const cfg = lemmaConfig();
