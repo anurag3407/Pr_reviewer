@@ -1,123 +1,128 @@
-# Autoheal — AI PR Review & Release-Readiness Assistant
+# Autoheal — multi-tenant AI PR review (self-healing)
 
-A closed-loop, state-driven **auto-healing PR assistant**. When a PR arrives the
-system tests it; if it fails it diagnoses the risks, generates a fix, pushes it,
-and retries — up to **5 times** — then escalates to a human. Four pillars:
+Connect a GitHub repo. On every pull request, Autoheal reviews the diff **with
+full-codebase context**, ranks each finding by severity, gives the PR one clear
+**flag**, lets you **chat** to a fix, and can **commit the fix and re-scan until
+the flag is SAFE**. Built to be higher-signal than diff-only review bots.
 
-- **Lemma** — state memory (a live PostgreSQL-backed pod; the source of truth).
-- **Tester** — pluggable runner: deterministic mock · `npm test` · real TestSprite.
-- **Orchestrator** — the `while (retry_count < 5)` loop, in Node.
-- **Operator console** — a Next.js dashboard (dark, instrument-grade) with a
-  threat grid, a retry vital-sign, and a human approval gate.
+- **Auth** — Clerk (multi-tenant; every row scoped by the Clerk user id).
+- **Repo access** — a GitHub App (real-time PR webhooks, bot identity).
+- **Model** — MiMo-V2.5-Pro via Bynara (OpenAI-compatible, ~1M-token context).
+- **State** — a live PostgreSQL-backed Lemma pod (the source of truth).
 
 ```
-GitHub PR ──webhook──▶ /api/webhooks/github ──create row──▶ Lemma pod (pull_requests)
-                              │
-                              ▼  void runHealingLoop(prId)   (fire-and-forget)
-                    ┌───────────────────────────────────────────┐
-                    │ ORCHESTRATOR  while (retry_count < 5)      │
-                    │  1. TESTING  → runTests()  mock|npm|TS     │
-                    │  2. pass?    → READY_FOR_MERGE, stop       │
-                    │  3. fail     → write identified_risks,     │
-                    │                generateFix() (Claude),     │
-                    │                pushFix() (mock), retry++    │
-                    │  4. hit 5?   → AWAITING_HUMAN_APPROVAL      │
-                    └───────────────────────────────────────────┘
-                              │ (every transition persisted)
-                              ▼
-   Operator console ◀─ poll /api/prs ─ route handlers ─ LemmaClient (server, LEMMA_TOKEN)
+landing ─Clerk─▶ /dashboard ─install GitHub App─▶ projects (repo + watched branches)
+                                                         │
+GitHub PR ─webhook(HMAC)─▶ /api/webhooks/github ─ map repo+installation → owner ─▶ reviews row
+                                                         │ void runReviewLoop()
+        ┌────────────────────────────────────────────────────────────────┐
+        │ gatherContext: diff + FULL changed files + 1-hop imports + map   │
+        │ → MiMo structured review → flag + findings(file:line, severity,  │
+        │   suggested fix) persisted to the Lemma pod                      │
+        └────────────────────────────────────────────────────────────────┘
+                                                         │
+   /dashboard/reviews/[id] ◀─ poll ─ route handlers ─ Lemma (owner-scoped)
+     flag · findings · chat · "Fix with PR"
+                                                         │ void runFixLoop()
+        ┌────────────────────────────────────────────────────────────────┐
+        │ while flag≠SAFE and iter<MAX: generate whole-file edits →        │
+        │ commit to head branch (Git Data API) → re-scan                  │
+        └────────────────────────────────────────────────────────────────┘
 ```
 
-## Quick start
+## Setup
 
 ```bash
 npm install
-
-# 1. Point at a live Lemma pod (the state layer — required).
-cp .env.example .env.local           # fill LEMMA_POD_ID + LEMMA_TOKEN
-#   token:  lemma auth login   (or a service token)
-#   pod:    lemma pod create pr-healing-pod   → its id
-
-# 2. Create the two tables in the pod (idempotent).
-npm run lemma:setup
-
-# 3. Run it.
-npm run dev                          # http://localhost:3000
-
-# 4. Drive a full demo (no GitHub needed): mock runner fails twice, then passes.
-npm run simulate
-#   watch the console:  TESTING → HEALING (1/5, 2/5) → READY_FOR_MERGE
-
-# Demo the human gate (force every attempt to fail):
-FORCE_FAIL=1 npm run dev             # in one terminal
-npm run simulate                     # in another → reaches 5/5 → AWAITING_HUMAN_APPROVAL
-#   then click "Approve release" on the card.
+cp .env.example .env.local      # then fill it in (see below)
 ```
 
-## How state lives in Lemma
+**1. Lemma (state).** `lemma auth login` for a token (it **expires** — re-run when
+reviews stall with an auth error), `lemma pod create` for a pod id. Put both in
+`.env.local`, then provision the tables (idempotent, additive):
 
-Two tables (schemas in `lemma/tables/*.json`, mirrored in `lib/types.ts`):
+```bash
+node --env-file=.env.local --import tsx scripts/lemma-setup.ts   # or: npm run lemma:setup
+```
 
-- **`pull_requests`** — one row per PR: `status`, `retry_count`, `last_error`, …
-- **`identified_risks`** — one row per surfaced risk: `severity`, `category`,
-  `recommended_fix`, `pr_id` (join key), …
+**2. Model.** `BYNARA_API_KEY` (MiMo). An `ANTHROPIC_API_KEY` fallback is used
+only if Bynara is unset.
 
-`lib/lemma.ts` is the only module that talks to the pod. It uses the official
-`lemma-sdk` `LemmaClient`, with one twist worth knowing:
+**3. Clerk (auth).** Dev works in **keyless** mode automatically (keys in
+`.clerk/.tmp`). For production, claim the app and set
+`NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY` + `CLERK_SECRET_KEY`.
 
-> **Server-side auth.** `lemma-sdk` only injects a bearer token from the browser
-> (`localStorage`); in Node it expects cookie auth. There's no `token` config
-> field. So `lib/lemma.ts` subclasses the SDK's `AuthManager` to force
-> "token mode" (`isTokenMode → true`, `getBearerToken → LEMMA_TOKEN`), which is
-> exactly what the SDK's request layer reads. Also: the SDK pulls in
-> `supertokens-web-js`, whose subpath uses directory imports that **raw Node ESM
-> rejects** — fine under a bundler, so `next.config.mjs` deliberately *bundles*
-> `lemma-sdk` (rather than externalizing it) and the scripts run under `tsx`.
+**4. GitHub App (repo access).** Register one at
+**github.com/settings/apps/new**:
 
-The dashboard never holds the token: it polls server **route handlers**
-(`/api/prs`, `/api/prs/[id]/approve|reject|rerun`) that read/write the pod.
+- **Permissions:** Pull requests *Read & write*, Contents *Read & write*,
+  Metadata *Read*.
+- **Subscribe to events:** *Pull request*, *Installation*.
+- **Webhook URL:** `<APP_URL>/api/webhooks/github` — for local dev forward it with
+  a free tunnel: `npx smee-client --url https://smee.io/<id> --target http://localhost:3000/api/webhooks/github`.
+- **Setup URL:** `<APP_URL>/api/github/setup` (where users land after installing).
+- Generate a **private key** and a **webhook secret**.
 
-## Configuration
+Put `GITHUB_APP_ID`, `GITHUB_APP_PRIVATE_KEY`, `GITHUB_APP_CLIENT_ID/SECRET`,
+`GITHUB_APP_SLUG`, `GITHUB_WEBHOOK_SECRET` in `.env.local`.
 
-| var | default | meaning |
-|---|---|---|
-| `LEMMA_POD_ID`, `LEMMA_TOKEN` | — | **required** — the live pod + bearer token |
-| `LEMMA_API_URL`, `LEMMA_AUTH_URL` | `api.lemma.work`, `lemma.work/auth` | pod endpoints |
-| `TEST_RUNNER` | `mock` | `mock` · `npm` · `testsprite` |
-| `FORCE_FAIL` | `0` | mock runner fails every attempt (demo the gate) |
-| `TESTSPRITE_API_KEY`, `TESTSPRITE_TEST_ID` | — | real TestSprite path (needs a public preview URL) |
-| `ANTHROPIC_API_KEY` | — | unset → fixer uses a deterministic mock |
-| `FIXER_MODEL` | `claude-opus-4-8` | Claude model for fix generation |
-| `GIT_MODE` | `mock` | `mock` · `real` (real only touches `GIT_REPO_DIR`) |
-| `GITHUB_WEBHOOK_SECRET` | — | verifies the inbound HMAC when set |
-| `LOOP_STEP_DELAY_MS` | `1200` | pause between heals so transitions are visible |
+```bash
+npm run dev                     # http://localhost:3000  (may pick another port if busy)
+```
 
-## The three pluggable adapters
+## Using it
 
-- **Tester** (`lib/tester.ts`) — `mock` scripts a fail→fail→pass arc; `npm` runs
-  `npm test` and maps a non-zero exit to a `TEST_FAILURE`; `testsprite` runs the
-  real CLI (`test run … --wait`, then `test failure get`) against a public URL.
-- **Fixer** (`lib/fixer.ts`) — Claude (`claude-opus-4-8`) turns risks into a
-  proposed diff; falls back to a deterministic mock when no API key (or on error).
-- **Git** (`lib/git.ts`) — mock by default (logs a fake sha, per the brief);
-  `real` commits to a *separate* checkout via `simple-git`, never this repo.
+1. Sign up → **Dashboard** → **Projects** → **Install GitHub App** on a repo.
+2. The repo appears as a project; pick which **base branches** to watch (empty =
+   all), toggle auto-review.
+3. Open a PR on a watched branch → a review appears, walks `REVIEWING → {flag}`,
+   with findings (file:line, severity, suggested fix) and a **threat grid**.
+4. **Chat** about the PR or a specific finding ("why is this happening", "give me
+   a better approach"); a converged fix is saved back to the finding.
+5. **Fix with PR** → Autoheal commits whole-file fixes to the head branch and
+   re-scans until the flag is `SAFE` (or it spends `MAX_FIX_ITERS` and asks for a
+   human).
 
-## Verification
+**Trigger a review without a live webhook** (point at a connected repo + open PR):
 
-- `npm run build` — compiles clean (lemma-sdk bundles under webpack).
-- Loop mechanics (mock backends, no pod needed): the arc is
-  `heal#1 → heal#2 → READY_FOR_MERGE on attempt 3`; with `FORCE_FAIL=1` it
-  walks five heals to `AWAITING_HUMAN_APPROVAL`.
-- With a live pod: `npm run lemma:setup` then
-  `lemma table list --pod-id <id>` shows both tables; `npm run simulate` walks a
-  PR through the states and populates the threat grid.
+```bash
+SIM_REPO=owner/name SIM_INSTALLATION_ID=12345678 SIM_PR_NUMBER=42 \
+  node --env-file=.env.local --import tsx scripts/simulate-pr.ts
+```
 
-## Caveats
+## Data model
 
-- **Live pod required.** State is the pod only (no local DB fallback). Without
-  `LEMMA_TOKEN`/`LEMMA_POD_ID` the app boots and the console shows a clear
-  "no pod" banner, but nothing persists.
-- **Fire-and-forget webhook** survives under `next dev` / a long-running Node
-  host; serverless platforms may cut off background work mid-loop.
-- **TestSprite** rejects localhost — the real path needs a public preview URL,
-  which is why `mock` is the default runner.
+Four `owner_id`-scoped tables (schemas in `lemma/tables/*.json`, mirrored in
+`lib/types.ts`): **`projects`** (connected repos + watched branches),
+**`reviews`** (one per PR: `flag`, `scan_count`, `summary`, `head_sha`),
+**`findings`** (per-line: severity, category, suggested_fix, confidence),
+**`chat_messages`**.
+
+`lib/lemma.ts` is the only module that talks to the pod. It forces the SDK into
+headless bearer-token mode by subclassing `AuthManager` (the SDK only reads a
+browser token otherwise), and `next.config.mjs` deliberately **bundles**
+`lemma-sdk` so its `supertokens-web-js` directory imports resolve.
+
+## Accuracy: how context is built
+
+`lib/context.ts` packs, to a token budget (`CONTEXT_TOKEN_BUDGET`, ~1M available):
+PR metadata → unified diff → **full line-numbered content of changed files** →
+their **first-order local imports** → a **repo map**. Seeing the change *in situ*
+(not just the hunk) is what lets the review catch issues a diff-only pass misses.
+The review prompt (`lib/prompts.ts`) is tuned for **precision** — a few true,
+material findings over noise.
+
+## Configuration (`.env.local`)
+
+See `.env.example` for the full list. Key knobs: `REVIEW_MODEL`
+(`mimo-v2.5-pro-free`), `CONTEXT_TOKEN_BUDGET` (300k), `MAX_FIX_ITERS` (4),
+`POST_GITHUB_REVIEWS` (set to `1` to also post findings as native PR comments).
+
+## Notes
+
+- **Lemma token expires** — refresh `LEMMA_TOKEN` via `lemma auth login` when the
+  dashboard shows a state-pod auth error.
+- **Fire-and-forget** review/fix loops need a long-running Node host; serverless
+  may cut off background work mid-loop.
+- Fixes commit to the contributor's **head branch** (a deliberate choice so the
+  same PR re-scans to SAFE); the commit is attributed to the GitHub App bot.

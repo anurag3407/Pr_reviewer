@@ -1,39 +1,57 @@
 /**
- * scripts/simulate-pr.ts — drive a full auto-healing run with zero GitHub setup.
+ * scripts/simulate-pr.ts — trigger a review without waiting for a real webhook.
  *
- *   npx tsx scripts/simulate-pr.ts            (or: npm run simulate)
+ *   node --env-file=.env.local --import tsx scripts/simulate-pr.ts
  *
- * POSTs a synthetic PR webhook to the running app. Watch the dashboard:
- *   TESTING → HEALING (1/5, 2/5) → READY_FOR_MERGE
+ * POSTs a GitHub-shaped `pull_request` event to the running app for a repo you've
+ * already connected (so a project row exists to resolve the owner + installation).
+ * Set these to point at a real open PR the App can see:
  *
- * Demo the human-approval gate by forcing failures (set on the *server* that
- * runs the loop, i.e. the `next dev` process):
- *   TEST_RUNNER=mock FORCE_FAIL=1 npm run dev      # in one terminal
- *   npm run simulate                               # in another → reaches 5/5
- *
- * Env: APP_URL (default http://localhost:3000), PREVIEW_URL (optional),
- *      GITHUB_WEBHOOK_SECRET (if the server verifies signatures).
+ *   SIM_REPO=owner/name           (required)
+ *   SIM_INSTALLATION_ID=12345678  (required — from the connected project)
+ *   SIM_PR_NUMBER=42              (required — an open PR)
+ *   SIM_BASE=main                 (base branch; default main)
+ *   SIM_HEAD=feature/x            (head branch; default feature/demo)
+ *   APP_URL=http://localhost:3000
+ *   GITHUB_WEBHOOK_SECRET=...      (if the server verifies signatures)
  */
 
 import crypto from "node:crypto";
 
 const APP_URL = process.env.APP_URL ?? "http://localhost:3000";
-
-const SAMPLES = [
-  { repo: "acme/checkout", branch: "feature/apply-coupon", author: "daniela", title: "Apply coupon at checkout" },
-  { repo: "acme/checkout", branch: "fix/empty-cart-crash", author: "marcus", title: "Guard against empty cart" },
-  { repo: "acme/web", branch: "feature/a11y-coupon-field", author: "priya", title: "Accessible coupon input" },
-];
+const repo = process.env.SIM_REPO;
+const installationId = process.env.SIM_INSTALLATION_ID;
+const prNumber = process.env.SIM_PR_NUMBER;
 
 async function main(): Promise<void> {
-  const sample = SAMPLES[Math.floor((Date.now() / 1000) % SAMPLES.length)];
-  const body = JSON.stringify({
-    pr_number: String(Date.now()).slice(-5),
-    preview_url: process.env.PREVIEW_URL ?? null,
-    ...sample,
-  });
+  if (!repo || !installationId || !prNumber) {
+    console.error(
+      "[simulate] Set SIM_REPO, SIM_INSTALLATION_ID and SIM_PR_NUMBER to a real connected repo + open PR.\n" +
+        "[simulate] (Connect the repo first at /dashboard/projects; the installation id is shown on the project.)",
+    );
+    process.exit(1);
+  }
 
-  const headers: Record<string, string> = { "content-type": "application/json" };
+  const [owner, name] = repo.split("/");
+  const payload = {
+    action: "opened",
+    installation: { id: Number(installationId) },
+    repository: { full_name: repo, name, owner: { login: owner } },
+    pull_request: {
+      number: Number(prNumber),
+      title: process.env.SIM_TITLE ?? `Review request for PR #${prNumber}`,
+      user: { login: process.env.SIM_AUTHOR ?? "contributor" },
+      head: { ref: process.env.SIM_HEAD ?? "feature/demo", sha: process.env.SIM_HEAD_SHA ?? "" },
+      base: { ref: process.env.SIM_BASE ?? "main" },
+      html_url: `https://github.com/${repo}/pull/${prNumber}`,
+    },
+  };
+  const body = JSON.stringify(payload);
+
+  const headers: Record<string, string> = {
+    "content-type": "application/json",
+    "x-github-event": "pull_request",
+  };
   const secret = process.env.GITHUB_WEBHOOK_SECRET;
   if (secret) {
     headers["x-hub-signature-256"] =
@@ -41,15 +59,13 @@ async function main(): Promise<void> {
   }
 
   const url = `${APP_URL}/api/webhooks/github`;
-  console.log(`[simulate] POST ${url}`);
-  console.log(`[simulate] ${sample.title} (${sample.branch})`);
-
+  console.log(`[simulate] POST ${url}  (${repo} #${prNumber})`);
   try {
     const res = await fetch(url, { method: "POST", headers, body });
     const text = await res.text();
     console.log(`[simulate] ← ${res.status} ${text}`);
     if (!res.ok) process.exitCode = 1;
-    else console.log("[simulate] watch the dashboard at " + APP_URL);
+    else console.log(`[simulate] watch the dashboard at ${APP_URL}/dashboard`);
   } catch (error) {
     console.error(`[simulate] request failed: ${(error as Error).message}`);
     console.error("[simulate] is the app running?  npm run dev");

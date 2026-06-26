@@ -1,0 +1,19 @@
+{
+  "name": "findings",
+  "enable_rls": false,
+  "columns": [
+    { "name": "owner_id", "type": "TEXT", "required": true, "description": "Clerk user id (tenant key)" },
+    { "name": "review_id", "type": "TEXT", "required": true, "description": "reviews.id this finding belongs to" },
+    { "name": "scan", "type": "INTEGER", "default": 1, "description": "which scan number surfaced this" },
+    { "name": "severity", "type": "TEXT", "description": "LOW | MEDIUM | HIGH | CRITICAL" },
+    { "name": "category", "type": "TEXT", "description": "SECURITY | BUG | PERFORMANCE | RELIABILITY | STYLE | COMPLIANCE | TEST" },
+    { "name": "file_path", "type": "TEXT", "description": "path of the offending file" },
+    { "name": "line_start", "type": "INTEGER", "description": "first offending line (1-based)" },
+    { "name": "line_end", "type": "INTEGER", "description": "last offending line (1-based)" },
+    { "name": "title", "type": "TEXT", "required": true, "description": "short one-line label" },
+    { "name": "detail", "type": "TEXT", "description": "root-cause explanation" },
+    { "name": "suggested_fix", "type": "TEXT", "description": "proposed replacement code / diff" },
+    { "name": "confidence", "type": "FLOAT", "description": "0..1 model confidence" },
+    { "name": "status", "type": "TEXT", "default": "OPEN", "description": "OPEN | FIXED | DISMISSED" }
+  ]
+}

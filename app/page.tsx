@@ -1,169 +1,148 @@
-"use client";
-
 /**
- * Operator console. Polls /api/prs every ~2.5s and renders the live state of
- * every PR under autonomous care: the threat grid, the fleet summary, and the
- * pipeline of PR cards. All state lives in the Lemma pod — this is a read view
- * over it, plus the human approval controls.
+ * Marketing landing page (public). The product entry point: pitch, feature
+ * grid, the PR-flag legend, and auth CTAs. Signed-in visitors get a straight
+ * shot to the dashboard.
+ *
+ * Conditional auth UI is driven by `auth()` server-side (this Clerk major drops
+ * the <SignedIn>/<SignedOut> control components in favor of a `Show`/`auth`).
  */
 
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { PRCard } from "./components/PRCard";
-import { RiskMatrix } from "./components/RiskMatrix";
-import { STATUS_META } from "./components/status";
-import { MAX_RETRIES, type IdentifiedRisk, type PRStatus, type PRWithRisks } from "@/lib/types";
+import Link from "next/link";
+import { auth } from "@clerk/nextjs/server";
+import { UserButton } from "@clerk/nextjs";
 
-interface PodInfo {
-  configured: boolean;
-  reachable: boolean;
-  podId: string | null;
-  error?: string;
-}
-interface Feed {
-  pod: PodInfo;
-  prs: PRWithRisks[];
-}
-
-const POLL_MS = 2500;
-
-const FLEET_ORDER: PRStatus[] = [
-  "TESTING",
-  "HEALING",
-  "AWAITING_HUMAN_APPROVAL",
-  "READY_FOR_MERGE",
-  "APPROVED_OVERRIDE",
-  "REJECTED",
-  "PENDING",
+const FEATURES = [
+  {
+    icon: "{ }",
+    title: "Reads your whole codebase",
+    body: "Not just the diff. Every changed file in full, the modules they import, and a map of the repo — packed into a 1M-token context window so the review understands the change in situ.",
+  },
+  {
+    icon: "⚠",
+    title: "Severity-ranked findings",
+    body: "Each problematic line is pinpointed and graded LOW → CRITICAL, with a root-cause explanation and a concrete suggested fix — not vague nitpicks.",
+  },
+  {
+    icon: "✕",
+    title: "One clear verdict per PR",
+    body: "A single flag — SAFE, NEEDS_REVIEW, UNSAFE, or BLOCKED — so you know at a glance whether a pull request is mergeable.",
+  },
+  {
+    icon: "✦",
+    title: "Chat your way to the fix",
+    body: "Ask why an issue is happening or for a better approach. The reviewer answers with your actual code in context and converges on a final fix.",
+  },
+  {
+    icon: "↻",
+    title: "Fix with PR — then re-scan",
+    body: "One click commits the fix to the branch and re-reviews automatically, looping until the PR flag turns SAFE.",
+  },
+  {
+    icon: "◆",
+    title: "Premium model",
+    body: "Powered by MiMo-V2.5-Pro — a SWE-bench-grade reasoning model built for complex software engineering over very long contexts.",
+  },
 ];
 
-export default function Page() {
-  const [feed, setFeed] = useState<Feed | null>(null);
-  const seen = useRef(false);
+const FLAGS = [
+  { tone: "ready", label: "SAFE", note: "no material issues" },
+  { tone: "test", label: "NEEDS_REVIEW", note: "minor / medium findings" },
+  { tone: "await", label: "UNSAFE", note: "high-severity issues" },
+  { tone: "reject", label: "BLOCKED", note: "critical: security / data loss" },
+];
 
-  const load = useCallback(async () => {
-    try {
-      const res = await fetch("/api/prs", { cache: "no-store" });
-      const data = (await res.json()) as Feed;
-      setFeed(data);
-      seen.current = true;
-    } catch {
-      /* transient poll error — keep the last good frame */
-    }
-  }, []);
-
-  useEffect(() => {
-    load();
-    const t = setInterval(load, POLL_MS);
-    return () => clearInterval(t);
-  }, [load]);
-
-  const prs = feed?.prs ?? [];
-  const pod = feed?.pod;
-
-  const counts = useMemo(() => {
-    const c = {} as Record<PRStatus, number>;
-    for (const pr of prs) c[pr.status] = (c[pr.status] ?? 0) + 1;
-    return c;
-  }, [prs]);
-
-  const allRisks = useMemo<IdentifiedRisk[]>(() => prs.flatMap((p) => p.risks), [prs]);
-  const activeCount = (counts.TESTING ?? 0) + (counts.HEALING ?? 0);
-  const live = Boolean(pod?.configured && pod?.reachable);
+export default async function LandingPage() {
+  const { userId } = await auth();
+  const signedIn = Boolean(userId);
 
   return (
-    <main className="console">
-      <header className="bar">
+    <main className="landing">
+      <nav className="nav">
         <div className="brand">
           <span className="brand__glyph">↻</span>
           <div>
             <div className="brand__name">Autoheal</div>
-            <div className="brand__sub">autonomous pr healing · {MAX_RETRIES}-try loop</div>
+            <div className="brand__sub">ai pr review · self-healing</div>
           </div>
         </div>
-        <div className="bar__right">
-          <div className="barstat">
-            <b>{prs.length}</b> tracked
-          </div>
-          <div className="barstat">
-            <b>{activeCount}</b> active
-          </div>
-          <div className="barstat">
-            <b>{counts.AWAITING_HUMAN_APPROVAL ?? 0}</b> awaiting you
-          </div>
-          <span className="podlight" data-live={live}>
-            <span className="podlight__dot" />
-            {podLabel(pod)}
-          </span>
+        <div className="nav__links">
+          {signedIn ? (
+            <>
+              <Link href="/dashboard" className="btn btn--go">
+                Open dashboard
+              </Link>
+              <UserButton />
+            </>
+          ) : (
+            <>
+              <Link href="/sign-in" className="btn">
+                Sign in
+              </Link>
+              <Link href="/sign-up" className="btn btn--go">
+                Get started
+              </Link>
+            </>
+          )}
         </div>
-      </header>
+      </nav>
 
-      {pod && !pod.configured && (
-        <div className="banner">
-          Live pod not configured. Set <code>LEMMA_TOKEN</code> and <code>LEMMA_POD_ID</code> in{" "}
-          <code>.env.local</code>, then run <code>npm run lemma:setup</code>.
+      <section className="hero">
+        <span className="hero__eyebrow">code review, done right</span>
+        <h1 className="hero__title">
+          AI code review that actually
+          <br />
+          reads your whole codebase.
+        </h1>
+        <p className="hero__sub">
+          Connect a GitHub repo. On every pull request, Autoheal reviews the diff with
+          full-codebase context, ranks each finding by severity, flags the PR, and can fix it —
+          re-scanning until it&apos;s safe. More signal, less noise than the review bots you know.
+        </p>
+        <div className="hero__cta">
+          {signedIn ? (
+            <Link href="/dashboard" className="btn btn--go btn--lg">
+              Open your dashboard →
+            </Link>
+          ) : (
+            <>
+              <Link href="/sign-up" className="btn btn--go btn--lg">
+                Start reviewing free
+              </Link>
+              <Link href="/sign-in" className="btn btn--lg">
+                I have an account
+              </Link>
+            </>
+          )}
         </div>
-      )}
-      {pod && pod.configured && !pod.reachable && (
-        <div className="banner">
-          Pod unreachable{pod.error ? <> — <code>{pod.error}</code></> : null}. Check the token and pod id.
-        </div>
-      )}
 
-      <section className="grid-top">
-        <div className="panel">
-          <div className="panel__head">
-            <span className="eyebrow">Threat grid</span>
-            <span className="panel__hint">{allRisks.length} risks surfaced</span>
-          </div>
-          <RiskMatrix risks={allRisks} />
-        </div>
-
-        <div className="panel">
-          <div className="panel__head">
-            <span className="eyebrow">Fleet</span>
-            <span className="panel__hint">by status</span>
-          </div>
-          <div className="fleet">
-            {FLEET_ORDER.filter((s) => (counts[s] ?? 0) > 0).map((s) => (
-              <div className="fleet__row" key={s} data-tone={STATUS_META[s].tone}>
-                <span className="fleet__tick" />
-                <span className="fleet__label">{STATUS_META[s].label}</span>
-                <span className="fleet__count">{counts[s]}</span>
-              </div>
-            ))}
-            {prs.length === 0 && <span className="fleet__label">No PRs in flight.</span>}
-          </div>
+        <div className="flagrow">
+          {FLAGS.map((f) => (
+            <span className="flagchip" data-tone={f.tone} key={f.label}>
+              <span className="flagchip__dot" />
+              <b>{f.label}</b>
+              <span className="flagchip__note">{f.note}</span>
+            </span>
+          ))}
         </div>
       </section>
 
-      <section className="pipe">
-        <div className="pipe__head">
-          <span className="eyebrow">Pipeline</span>
-          <span className="panel__hint">newest first</span>
-        </div>
-
-        {prs.length === 0 && seen.current && live ? (
-          <div className="empty">
-            <div className="empty__big">No pull requests yet.</div>
-            <div>
-              Drive a demo run: <code>npm run simulate</code>
-            </div>
+      <section className="features">
+        {FEATURES.map((f) => (
+          <div className="feature panel" key={f.title}>
+            <div className="feature__icon">{f.icon}</div>
+            <h3 className="feature__title">{f.title}</h3>
+            <p className="feature__body">{f.body}</p>
           </div>
-        ) : (
-          <div className="pipe__list">
-            {prs.map((pr) => (
-              <PRCard key={pr.id} pr={pr} onChange={load} />
-            ))}
-          </div>
-        )}
+        ))}
       </section>
+
+      <footer className="foot">
+        <span>Autoheal</span>
+        <span className="foot__dot">·</span>
+        <span>state on a live Lemma pod</span>
+        <span className="foot__dot">·</span>
+        <span>reviews by MiMo-V2.5-Pro</span>
+      </footer>
     </main>
   );
-}
-
-function podLabel(pod?: PodInfo): string {
-  if (!pod) return "connecting…";
-  if (!pod.configured) return "no pod";
-  if (!pod.reachable) return "unreachable";
-  return `live · ${pod.podId?.slice(0, 8) ?? "pod"}`;
 }

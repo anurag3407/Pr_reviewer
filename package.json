@@ -13,8 +13,10 @@
   },
   "dependencies": {
     "@anthropic-ai/sdk": "^0.106.0",
+    "@clerk/nextjs": "^7.5.9",
     "lemma-sdk": "^0.5.2",
     "next": "^15.5.4",
+    "octokit": "^5.0.5",
     "react": "^19.0.0",
     "react-dom": "^19.0.0",
     "simple-git": "^3.36.0",

@@ -1,0 +1,26 @@
+{
+  "name": "reviews",
+  "enable_rls": false,
+  "columns": [
+    { "name": "owner_id", "type": "TEXT", "required": true, "description": "Clerk user id (tenant key)" },
+    { "name": "project_id", "type": "TEXT", "required": true, "description": "projects.id" },
+    { "name": "repo", "type": "TEXT", "required": true, "description": "owner/name (denormalized)" },
+    { "name": "pr_number", "type": "TEXT", "required": true, "description": "GitHub PR number" },
+    { "name": "title", "type": "TEXT", "description": "PR title" },
+    { "name": "author", "type": "TEXT", "description": "PR author login" },
+    { "name": "head_branch", "type": "TEXT", "description": "PR head branch (the one we fix)" },
+    { "name": "base_branch", "type": "TEXT", "description": "PR base branch (the watched target)" },
+    { "name": "head_sha", "type": "TEXT", "description": "commit SHA last reviewed" },
+    {
+      "name": "flag",
+      "type": "TEXT",
+      "required": true,
+      "default": "REVIEWING",
+      "description": "REVIEWING | SAFE | NEEDS_REVIEW | UNSAFE | BLOCKED | ERROR"
+    },
+    { "name": "scan_count", "type": "INTEGER", "required": true, "default": 0, "description": "number of review scans run" },
+    { "name": "summary", "type": "TEXT", "description": "AI overall summary of the PR" },
+    { "name": "html_url", "type": "TEXT", "description": "link to the PR on GitHub" },
+    { "name": "last_error", "type": "TEXT", "description": "latest error if a scan failed" }
+  ]
+}

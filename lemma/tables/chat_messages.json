@@ -1,0 +1,11 @@
+{
+  "name": "chat_messages",
+  "enable_rls": false,
+  "columns": [
+    { "name": "owner_id", "type": "TEXT", "required": true, "description": "Clerk user id (tenant key)" },
+    { "name": "review_id", "type": "TEXT", "required": true, "description": "reviews.id this message belongs to" },
+    { "name": "finding_id", "type": "TEXT", "description": "findings.id; absent = PR-level chat" },
+    { "name": "role", "type": "TEXT", "required": true, "description": "user | assistant" },
+    { "name": "content", "type": "TEXT", "required": true, "description": "message text" }
+  ]
+}

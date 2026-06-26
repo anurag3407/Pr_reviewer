@@ -1,0 +1,14 @@
+{
+  "name": "projects",
+  "enable_rls": false,
+  "columns": [
+    { "name": "owner_id", "type": "TEXT", "required": true, "description": "Clerk user id (tenant key)" },
+    { "name": "repo", "type": "TEXT", "required": true, "description": "owner/name" },
+    { "name": "repo_id", "type": "TEXT", "description": "GitHub repository id" },
+    { "name": "installation_id", "type": "TEXT", "required": true, "description": "GitHub App installation id" },
+    { "name": "default_branch", "type": "TEXT", "description": "repo default branch" },
+    { "name": "watched_branches", "type": "JSON", "description": "array of base branches to watch; empty/absent = all" },
+    { "name": "auto_review", "type": "BOOLEAN", "default": true, "description": "auto-review new PRs" },
+    { "name": "status", "type": "TEXT", "required": true, "default": "ACTIVE", "description": "ACTIVE | PAUSED" }
+  ]
+}
