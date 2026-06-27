@@ -1,0 +1,117 @@
+
+> lemma-pr-healer@0.1.0 dev
+> next dev
+
+   ▲ Next.js 15.5.19
+   - Local:        http://localhost:3000
+   - Network:      http://10.79.234.151:3000
+   - Environments: .env.local
+
+ ✓ Starting...
+ ✓ Ready in 27.7s
+ ○ Compiling /middleware ...
+ ✓ Compiled /middleware in 4.4s (212 modules)
+ ○ Compiling / ...
+ ✓ Compiled /api/reviews/[id] in 43.7s (2150 modules)
+
+[35m
+[Clerk]:[0m You are running in keyless mode.
+You can [35mclaim your keys[0m by visiting https://dashboard.clerk.com/apps/claim?framework=nextjs&token=20psrqav32sn4gg8r060mzr6ju20sxdprikkgr3l&return_url=http%3A%2F%2Flocalhost%3A3000%2F
+
+ GET / 200 in 63114ms
+ GET /api/reviews/dd287292-d6a3-4c7a-85b7-5b659e653812 200 in 71289ms
+ GET /api/reviews/dd287292-d6a3-4c7a-85b7-5b659e653812 200 in 71366ms
+ GET /api/reviews/dd287292-d6a3-4c7a-85b7-5b659e653812 200 in 71414ms
+ GET /api/reviews/dd287292-d6a3-4c7a-85b7-5b659e653812 200 in 71436ms
+ GET /api/reviews/dd287292-d6a3-4c7a-85b7-5b659e653812 200 in 71480ms
+ GET /api/reviews/dd287292-d6a3-4c7a-85b7-5b659e653812 200 in 71493ms
+ GET /api/reviews/dd287292-d6a3-4c7a-85b7-5b659e653812 200 in 1175ms
+ GET /api/reviews/dd287292-d6a3-4c7a-85b7-5b659e653812 200 in 1603ms
+ GET /api/reviews/dd287292-d6a3-4c7a-85b7-5b659e653812 200 in 1332ms
+ GET /api/reviews/dd287292-d6a3-4c7a-85b7-5b659e653812 200 in 1707ms
+ GET /api/reviews/dd287292-d6a3-4c7a-85b7-5b659e653812 200 in 1777ms
+ GET /api/reviews/dd287292-d6a3-4c7a-85b7-5b659e653812 200 in 1813ms
+ GET /api/reviews/dd287292-d6a3-4c7a-85b7-5b659e653812 200 in 1018ms
+ GET /api/reviews/dd287292-d6a3-4c7a-85b7-5b659e653812 200 in 1041ms
+ GET /api/reviews/dd287292-d6a3-4c7a-85b7-5b659e653812 200 in 731ms
+ GET /api/reviews/dd287292-d6a3-4c7a-85b7-5b659e653812 200 in 1298ms
+ GET /api/reviews/dd287292-d6a3-4c7a-85b7-5b659e653812 200 in 1506ms
+ GET /api/reviews/dd287292-d6a3-4c7a-85b7-5b659e653812 200 in 1516ms
+ GET /api/reviews/dd287292-d6a3-4c7a-85b7-5b659e653812 200 in 608ms
+ GET /api/reviews/dd287292-d6a3-4c7a-85b7-5b659e653812 200 in 1151ms
+ GET /api/reviews/dd287292-d6a3-4c7a-85b7-5b659e653812 200 in 1840ms
+ ○ Compiling /api/webhooks/github ...
+ ✓ Compiled /api/webhooks/github in 8.2s (2152 modules)
+ GET /api/reviews/dd287292-d6a3-4c7a-85b7-5b659e653812 200 in 2511ms
+ GET /api/reviews/dd287292-d6a3-4c7a-85b7-5b659e653812 200 in 11843ms
+ GET /api/reviews/dd287292-d6a3-4c7a-85b7-5b659e653812 200 in 8254ms
+ GET /api/reviews/dd287292-d6a3-4c7a-85b7-5b659e653812 200 in 3468ms
+ POST /api/webhooks/github 202 in 16718ms
+ GET /api/reviews/dd287292-d6a3-4c7a-85b7-5b659e653812 200 in 1586ms
+ GET /api/reviews/dd287292-d6a3-4c7a-85b7-5b659e653812 200 in 750ms
+ GET /api/reviews/dd287292-d6a3-4c7a-85b7-5b659e653812 200 in 629ms
+ GET /api/reviews/dd287292-d6a3-4c7a-85b7-5b659e653812 200 in 1377ms
+ GET /api/reviews/dd287292-d6a3-4c7a-85b7-5b659e653812 200 in 3960ms
+ GET /api/reviews/dd287292-d6a3-4c7a-85b7-5b659e653812 200 in 1074ms
+ GET /api/reviews/dd287292-d6a3-4c7a-85b7-5b659e653812 200 in 1699ms
+ GET /api/reviews/dd287292-d6a3-4c7a-85b7-5b659e653812 200 in 636ms
+ GET /api/reviews/dd287292-d6a3-4c7a-85b7-5b659e653812 200 in 879ms
+ GET /api/reviews/dd287292-d6a3-4c7a-85b7-5b659e653812 200 in 2890ms
+ GET /api/reviews/dd287292-d6a3-4c7a-85b7-5b659e653812 200 in 2239ms
+ GET /api/reviews/dd287292-d6a3-4c7a-85b7-5b659e653812 200 in 2359ms
+ GET /api/reviews/dd287292-d6a3-4c7a-85b7-5b659e653812 200 in 2373ms
+ GET /api/reviews/dd287292-d6a3-4c7a-85b7-5b659e653812 200 in 1435ms
+ GET /api/reviews/dd287292-d6a3-4c7a-85b7-5b659e653812 200 in 1536ms
+ GET /api/reviews/dd287292-d6a3-4c7a-85b7-5b659e653812 200 in 3372ms
+ GET /api/reviews/dd287292-d6a3-4c7a-85b7-5b659e653812 200 in 3541ms
+ GET /api/reviews/dd287292-d6a3-4c7a-85b7-5b659e653812 200 in 1839ms
+ GET /api/reviews/dd287292-d6a3-4c7a-85b7-5b659e653812 200 in 1142ms
+ GET /api/reviews/dd287292-d6a3-4c7a-85b7-5b659e653812 200 in 2744ms
+ GET /api/reviews/dd287292-d6a3-4c7a-85b7-5b659e653812 200 in 5845ms
+ GET /api/reviews/dd287292-d6a3-4c7a-85b7-5b659e653812 200 in 7053ms
+ GET /api/reviews/dd287292-d6a3-4c7a-85b7-5b659e653812 200 in 4355ms
+ GET /api/reviews/dd287292-d6a3-4c7a-85b7-5b659e653812 200 in 4332ms
+ GET /api/reviews/dd287292-d6a3-4c7a-85b7-5b659e653812 200 in 2689ms
+ GET /api/reviews/dd287292-d6a3-4c7a-85b7-5b659e653812 200 in 3065ms
+ GET /api/reviews/dd287292-d6a3-4c7a-85b7-5b659e653812 200 in 5576ms
+ GET /api/reviews/dd287292-d6a3-4c7a-85b7-5b659e653812 200 in 2533ms
+ GET /api/reviews/dd287292-d6a3-4c7a-85b7-5b659e653812 200 in 1092ms
+ GET /api/reviews/dd287292-d6a3-4c7a-85b7-5b659e653812 200 in 1754ms
+ GET /api/reviews/dd287292-d6a3-4c7a-85b7-5b659e653812 200 in 1298ms
+ GET /api/reviews/dd287292-d6a3-4c7a-85b7-5b659e653812 200 in 2519ms
+ GET /api/reviews/dd287292-d6a3-4c7a-85b7-5b659e653812 200 in 5912ms
+ GET /api/reviews/dd287292-d6a3-4c7a-85b7-5b659e653812 200 in 3267ms
+ GET /api/reviews/dd287292-d6a3-4c7a-85b7-5b659e653812 200 in 1827ms
+ GET /api/reviews/dd287292-d6a3-4c7a-85b7-5b659e653812 200 in 3368ms
+ GET /api/reviews/dd287292-d6a3-4c7a-85b7-5b659e653812 200 in 676ms
+ GET /api/reviews/dd287292-d6a3-4c7a-85b7-5b659e653812 200 in 1865ms
+ GET /api/reviews/dd287292-d6a3-4c7a-85b7-5b659e653812 200 in 6547ms
+ GET /api/reviews/dd287292-d6a3-4c7a-85b7-5b659e653812 200 in 4130ms
+ GET /api/reviews/dd287292-d6a3-4c7a-85b7-5b659e653812 200 in 3062ms
+ GET /api/reviews/dd287292-d6a3-4c7a-85b7-5b659e653812 200 in 3422ms
+ GET /api/reviews/dd287292-d6a3-4c7a-85b7-5b659e653812 200 in 3384ms
+ GET /api/reviews/dd287292-d6a3-4c7a-85b7-5b659e653812 200 in 1869ms
+ GET /api/reviews/dd287292-d6a3-4c7a-85b7-5b659e653812 200 in 2867ms
+ GET /api/reviews/dd287292-d6a3-4c7a-85b7-5b659e653812 200 in 3022ms
+ GET /api/reviews/dd287292-d6a3-4c7a-85b7-5b659e653812 200 in 2010ms
+ GET /api/reviews/dd287292-d6a3-4c7a-85b7-5b659e653812 200 in 2815ms
+ GET /api/reviews/dd287292-d6a3-4c7a-85b7-5b659e653812 200 in 1888ms
+ GET /api/reviews/dd287292-d6a3-4c7a-85b7-5b659e653812 200 in 2092ms
+ GET /api/reviews/dd287292-d6a3-4c7a-85b7-5b659e653812 200 in 2432ms
+ GET /api/reviews/dd287292-d6a3-4c7a-85b7-5b659e653812 200 in 706ms
+ GET /api/reviews/dd287292-d6a3-4c7a-85b7-5b659e653812 200 in 801ms
+ GET /api/reviews/dd287292-d6a3-4c7a-85b7-5b659e653812 200 in 714ms
+ GET /api/reviews/dd287292-d6a3-4c7a-85b7-5b659e653812 200 in 2197ms
+ GET /api/reviews/dd287292-d6a3-4c7a-85b7-5b659e653812 200 in 6886ms
+ GET /api/reviews/dd287292-d6a3-4c7a-85b7-5b659e653812 200 in 4566ms
+ GET /api/reviews/dd287292-d6a3-4c7a-85b7-5b659e653812 200 in 2511ms
+ GET /api/reviews/dd287292-d6a3-4c7a-85b7-5b659e653812 200 in 2494ms
+ GET /api/reviews/dd287292-d6a3-4c7a-85b7-5b659e653812 200 in 3298ms
+ GET /api/reviews/dd287292-d6a3-4c7a-85b7-5b659e653812 200 in 1535ms
+ GET /api/reviews/dd287292-d6a3-4c7a-85b7-5b659e653812 200 in 1852ms
+ GET /api/reviews/dd287292-d6a3-4c7a-85b7-5b659e653812 200 in 2333ms
+ GET /api/reviews/dd287292-d6a3-4c7a-85b7-5b659e653812 200 in 1095ms
+ GET /api/reviews/dd287292-d6a3-4c7a-85b7-5b659e653812 200 in 728ms
+ GET /api/reviews/dd287292-d6a3-4c7a-85b7-5b659e653812 200 in 2041ms
+ GET /api/reviews/dd287292-d6a3-4c7a-85b7-5b659e653812 200 in 559ms
+ GET /api/reviews/dd287292-d6a3-4c7a-85b7-5b659e653812 200 in 677ms

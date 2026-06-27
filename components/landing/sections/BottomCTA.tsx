@@ -43,24 +43,24 @@ export function BottomCTA() {
         >
           <div className="ln-bottom-cta__glow" aria-hidden="true" />
           <motion.p variants={itemVariants} className="ln-eyebrow ln-bottom-cta__eyebrow">
-            Start shipping safer code
+            Autonomous DevOps
           </motion.p>
 
           <motion.h2 variants={itemVariants} className="ln-display ln-bottom-cta__title">
-            Stop fixing PRs by hand.
+            Ready to ship unbreakable code?
           </motion.h2>
 
           <motion.p variants={itemVariants} className="ln-body ln-bottom-cta__body">
-            Join the teams that use Autoheal to review, heal, and merge with confidence.
-            Set up in minutes — no credit card required.
+            Join the next generation of autonomous DevOps and let your pipelines heal
+            themselves.
           </motion.p>
 
           <motion.div variants={itemVariants} className="ln-bottom-cta__actions">
             <Link href="/sign-up" className="ln-bottom-cta__btn ln-bottom-cta__btn--primary">
-              Get started free
+              Deploy AutoHeal Today
             </Link>
-            <Link href="/dashboard" className="ln-bottom-cta__btn ln-bottom-cta__btn--secondary">
-              Open dashboard
+            <Link href="#engine" className="ln-bottom-cta__btn ln-bottom-cta__btn--secondary">
+              Read the Documentation
             </Link>
           </motion.div>
         </motion.div>
@@ -90,10 +90,12 @@ export function BottomCTA() {
           max-width: 760px;
           margin-inline: auto;
           padding: var(--ln-space-20) var(--ln-space-12);
-          border: 1px solid var(--ln-line);
+          border: 1px solid var(--ln-line-strong);
           border-radius: var(--ln-radius-xl);
-          background: var(--ln-bg);
-          box-shadow: var(--ln-shadow-lg);
+          background: var(--ln-glass);
+          backdrop-filter: blur(30px) saturate(140%);
+          -webkit-backdrop-filter: blur(30px) saturate(140%);
+          box-shadow: var(--ln-shadow-xl);
           overflow: hidden;
         }
 
@@ -118,7 +120,7 @@ export function BottomCTA() {
           border-radius: var(--ln-radius-full);
           background: color-mix(in srgb, var(--ln-accent-violet) 6%, transparent);
           margin-bottom: var(--ln-space-6);
-          color: var(--ln-accent-violet);
+          color: var(--ln-accent-violet-bright);
         }
 
         .ln-bottom-cta__title {
@@ -165,25 +167,28 @@ export function BottomCTA() {
         }
 
         .ln-bottom-cta__btn--primary {
-          color: #ffffff;
-          background: linear-gradient(135deg, var(--ln-accent-violet), var(--ln-accent-violet-bright));
-          box-shadow: 0 8px 24px var(--ln-accent-glow);
+          color: #0a0712;
+          font-weight: 700;
+          background: linear-gradient(135deg, var(--ln-accent-violet-bright), var(--ln-accent-violet));
+          box-shadow: 0 8px 28px var(--ln-accent-glow);
         }
 
         .ln-bottom-cta__btn--primary:hover {
-          box-shadow: 0 12px 32px var(--ln-accent-glow);
+          box-shadow: 0 12px 40px var(--ln-accent-glow);
         }
 
         .ln-bottom-cta__btn--secondary {
           color: var(--ln-heading);
-          background: var(--ln-bg-elevated);
-          border: 1px solid var(--ln-line);
+          background: var(--ln-glass);
+          backdrop-filter: blur(14px);
+          -webkit-backdrop-filter: blur(14px);
+          border: 1px solid var(--ln-line-strong);
           box-shadow: var(--ln-shadow-sm);
         }
 
         .ln-bottom-cta__btn--secondary:hover {
-          border-color: var(--ln-line-strong);
-          box-shadow: var(--ln-shadow);
+          border-color: var(--ln-accent);
+          box-shadow: 0 0 24px var(--ln-accent-glow);
         }
 
         @media (prefers-reduced-motion: reduce) {

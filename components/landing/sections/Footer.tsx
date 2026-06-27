@@ -47,10 +47,9 @@ const linkColumns = [
   {
     title: "Product",
     links: [
-      { label: "Features", href: "#features" as const },
-      { label: "How it works", href: "#how-it-works" as const },
-      { label: "Healing", href: "#healing" as const },
-      { label: "Architecture", href: "#architecture" as const },
+      { label: "The AutoHeal Loop", href: "#engine" as const },
+      { label: "Architecture Engine", href: "#architecture" as const },
+      { label: "Install AutoHeal", href: "/sign-up" as const },
     ],
   },
   {
@@ -96,7 +95,7 @@ export function Footer() {
               <span className="ln-footer__logo">Autoheal</span>
             </Link>
             <p className="ln-footer__tagline">
-              AI reviews that fix your code before merge.
+              Autonomous pipeline healing. Zero downtime.
             </p>
           </motion.div>
 

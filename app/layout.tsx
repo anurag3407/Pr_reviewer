@@ -3,11 +3,12 @@ import { ClerkProvider } from "@clerk/nextjs";
 import "./globals.css";
 
 export const metadata: Metadata = {
-  title: "Autoheal · AI code review that reads your whole codebase",
+  title: "AutoHeal · Autonomous Pipeline Healing. Zero Downtime.",
   description:
-    "Connect a repo, and on every pull request Autoheal reviews the diff with full-codebase context — " +
-    "ranks each finding by severity, flags the PR SAFE/UNSAFE, and can fix it and re-scan until it's safe. " +
-    "Powered by MiMo-V2.5-Pro (1M-token context).",
+    "AutoHeal is a multi-agent CI/CD engineer that automatically triages, repairs, and commits fixes " +
+    "for broken builds. It monitors your pipeline, isolates the faulty commit, and runs a self-correction " +
+    "loop up to 5 times — escalating to a human only for complex architectural decisions. Ship resilient " +
+    "software faster, with absolute confidence.",
 };
 
 // Tint the Clerk widgets to match the ultra-dark glassmorphism shell.

@@ -1360,54 +1360,61 @@ body {
 .landing-v2,
 [data-landing="true"] {
   /* background / surface palette ------------------------------------------ */
-  /* Light SaaS surface system — the app shell keeps its own dark :root
-     tokens; only the .landing-v2 scope flips to this light palette. */
-  --ln-bg: #f6f7fb;
-  --ln-bg-elevated: #ffffff;
-  --ln-bg-sunken: #eef0f6;
-  --ln-surface: #ffffff;
-  --ln-surface-hi: #ffffff;
+  /* Ultra-dark glassmorphic surface system. Near-black voids with translucent
+     "glass" panels (use alongside backdrop-filter: blur in components). The app
+     shell keeps its own dark :root tokens; this only scopes the landing. */
+  --ln-bg: #06070b;
+  --ln-bg-elevated: rgba(255, 255, 255, 0.035);
+  --ln-bg-sunken: rgba(0, 0, 0, 0.35);
+  --ln-surface: rgba(16, 18, 27, 0.55);
+  --ln-surface-hi: rgba(255, 255, 255, 0.06);
 
-  --ln-line: #e4e8f0;
-  --ln-line-soft: #edf0f6;
-  --ln-line-strong: #d4dae6;
+  /* glass tint for panels that opt into backdrop blur */
+  --ln-glass: rgba(15, 17, 25, 0.55);
+  --ln-glass-hi: rgba(26, 29, 41, 0.6);
+
+  --ln-line: rgba(255, 255, 255, 0.08);
+  --ln-line-soft: rgba(255, 255, 255, 0.045);
+  --ln-line-strong: rgba(255, 255, 255, 0.16);
 
   /* ink ------------------------------------------------------------------- */
-  --ln-ink: #1f2737;
-  --ln-heading: #0a0f1d;
-  --ln-muted: #5a6478;
-  --ln-faint: #8a93a8;
-  --ln-placeholder: #aab2c4;
+  --ln-ink: #c9d1e2;
+  --ln-heading: #f4f7fc;
+  --ln-muted: #8b94a8;
+  --ln-faint: #5c6478;
+  --ln-placeholder: #495167;
 
   /* accents --------------------------------------------------------------- */
-  /* Brand = violet-600. Cyan/emerald are secondary, deepened for AA on light. */
-  --ln-accent-violet: #7c3aed;
-  --ln-accent-violet-bright: #8b5cf6;
-  --ln-accent-cyan: #0891b2;
-  --ln-accent-cyan-bright: #06b6d4;
-  --ln-accent-lime: #059669;
-  --ln-accent-lime-bright: #10b981;
+  /* Brand = violet. Cyan/emerald are secondary — brightened for AA on dark. */
+  --ln-accent-violet: #a78bfa;
+  --ln-accent-violet-bright: #c4b5fd;
+  --ln-accent-cyan: #38bdf8;
+  --ln-accent-cyan-bright: #67e8f9;
+  --ln-accent-lime: #34d399;
+  --ln-accent-lime-bright: #6ee7b7;
 
   --ln-accent: var(--ln-accent-violet);
   --ln-accent-bright: var(--ln-accent-violet-bright);
-  --ln-accent-glow: rgba(124, 58, 237, 0.18);
+  --ln-accent-glow: rgba(139, 92, 246, 0.40);
   --ln-success: var(--ln-accent-lime);
-  --ln-success-glow: rgba(16, 185, 129, 0.20);
+  --ln-success-glow: rgba(52, 211, 153, 0.32);
+  --ln-danger: #fb6f84;
+  --ln-danger-glow: rgba(251, 111, 132, 0.35);
 
   /* gradients ------------------------------------------------------------- */
   --ln-hero-gradient: radial-gradient(
       900px 520px at 82% -12%,
-      rgba(124, 58, 237, 0.10),
+      rgba(139, 92, 246, 0.22),
       transparent 60%
     ),
     radial-gradient(
       760px 480px at 10% 6%,
-      rgba(6, 182, 212, 0.08),
+      rgba(56, 189, 248, 0.16),
       transparent 55%
     ),
     radial-gradient(
       1000px 700px at 50% 118%,
-      rgba(16, 185, 129, 0.06),
+      rgba(52, 211, 153, 0.10),
       transparent 60%
     ),
     var(--ln-bg);
@@ -1460,10 +1467,10 @@ body {
   --ln-radius-xl: 1.75rem;
   --ln-radius-full: 9999px;
 
-  --ln-shadow-sm: 0 1px 2px rgba(16, 24, 40, 0.04), 0 1px 3px rgba(16, 24, 40, 0.06);
-  --ln-shadow: 0 4px 12px rgba(16, 24, 40, 0.06), 0 10px 28px rgba(16, 24, 40, 0.05);
-  --ln-shadow-lg: 0 12px 32px rgba(16, 24, 40, 0.08), 0 24px 56px rgba(16, 24, 40, 0.06);
-  --ln-shadow-xl: 0 20px 48px rgba(16, 24, 40, 0.10), 0 32px 80px rgba(16, 24, 40, 0.08);
+  --ln-shadow-sm: 0 1px 2px rgba(0, 0, 0, 0.4), 0 1px 3px rgba(0, 0, 0, 0.3);
+  --ln-shadow: 0 8px 24px rgba(0, 0, 0, 0.45), inset 0 1px 0 rgba(255, 255, 255, 0.03);
+  --ln-shadow-lg: 0 20px 50px rgba(0, 0, 0, 0.55), inset 0 1px 0 rgba(255, 255, 255, 0.04);
+  --ln-shadow-xl: 0 30px 80px rgba(0, 0, 0, 0.62), inset 0 1px 0 rgba(255, 255, 255, 0.05);
 
   --ln-glow-sm: 0 0 18px var(--ln-accent-glow);
   --ln-glow: 0 0 34px var(--ln-accent-glow);

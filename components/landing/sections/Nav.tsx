@@ -4,9 +4,7 @@ import Link from "next/link";
 import { useEffect, useState } from "react";
 
 const links = [
-  { label: "Features", href: "#features" as const },
-  { label: "How it works", href: "#how-it-works" as const },
-  { label: "Healing", href: "#healing" as const },
+  { label: "The Loop", href: "#engine" as const },
   { label: "Architecture", href: "#architecture" as const },
 ];
 
@@ -57,7 +55,7 @@ export function Nav() {
             Sign in
           </Link>
           <Link href="/sign-up" className="ln-nav__btn">
-            Get started
+            Install AutoHeal
           </Link>
         </div>
       </div>

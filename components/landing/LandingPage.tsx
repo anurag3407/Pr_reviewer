@@ -1,23 +1,17 @@
-import { loadWorkflow, loadArchitecture } from "@/components/landing/lib/loadMarkdown";
-import { Architecture } from "./sections/Architecture";
-import { Collaboration } from "./sections/Collaboration";
-import { Features } from "./sections/Features";
+import { Nav } from "./sections/Nav";
 import { Hero } from "./sections/Hero";
-import { Workflow } from "./sections/Workflow";
+import { AutoHealLoop } from "./sections/AutoHealLoop";
+import { ArchitectureEngine } from "./sections/ArchitectureEngine";
 import { BottomCTA } from "./sections/BottomCTA";
 import { Footer } from "./sections/Footer";
 
-export async function LandingPage() {
-  const workflowSections = loadWorkflow();
-  const architectureSections = loadArchitecture();
-
+export function LandingPage() {
   return (
     <div className="landing-v2" data-landing="true">
+      <Nav />
       <Hero />
-      <Collaboration />
-      <Features />
-      <Workflow sections={workflowSections} />
-      <Architecture sections={architectureSections} />
+      <AutoHealLoop />
+      <ArchitectureEngine />
       <BottomCTA />
       <Footer />
     </div>
