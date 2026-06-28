@@ -275,23 +275,127 @@ export async function deleteProject(id: string): Promise<void> {
   await lemma().records.delete(TABLES.projects, id);
 }
 
+/** True when a project row is eligible to drive an automatic review. */
+function isActionable(p: Project): boolean {
+  return p.status !== "PAUSED" && p.auto_review;
+}
+
+/** Newest-first by created_at; rows without a timestamp sort last. */
+function byCreatedDesc(a: Project, b: Project): number {
+  return String(b.created_at ?? "").localeCompare(String(a.created_at ?? ""));
+}
+
 /**
  * Webhook path: resolve the owning project for an incoming repo + installation.
- * No owner filter — this is how we DISCOVER the owner_id. Prefers an exact
- * installation match; falls back to repo-only.
+ * No owner filter — this is how we DISCOVER the owner_id.
+ *
+ * Prefers an exact installation match, then an *actionable* row (ACTIVE +
+ * auto_review), then the newest. The actionable preference makes the result
+ * deterministic and correct even if a stale/paused duplicate row still exists —
+ * so a leftover `auto_review:false` twin can't shadow the live one.
  */
 export async function findProjectByRepo(
   repo: string,
   installationId?: string,
 ): Promise<Project | null> {
   const rows = await listRows(TABLES.projects);
-  const projects = rows.map(toProject).filter((p) => p.repo === repo);
+  let projects = rows.map(toProject).filter((p) => p.repo === repo);
   if (projects.length === 0) return null;
   if (installationId) {
-    const exact = projects.find((p) => p.installation_id === String(installationId));
-    if (exact) return exact;
+    const exact = projects.filter((p) => p.installation_id === String(installationId));
+    if (exact.length > 0) projects = exact;
   }
+  projects.sort((a, b) => {
+    const rank = Number(isActionable(b)) - Number(isActionable(a));
+    return rank !== 0 ? rank : byCreatedDesc(a, b);
+  });
   return projects[0];
+}
+
+export interface ReconcileResult {
+  added: number;
+  updated: number;
+  removed: number;
+  deduped: number;
+}
+
+/**
+ * Make the stored projects for one (owner, installation) match the repos the
+ * GitHub App actually grants — the single source of truth.
+ *
+ *  1. Collapse duplicate rows for the same repo (keep the newest, delete rest).
+ *  2. Prune rows for repos this installation no longer grants.
+ *  3. Update surviving rows whose repo_id / default_branch drifted.
+ *  4. Create rows for newly granted repos the owner doesn't have yet.
+ *
+ * User-managed fields (auto_review, watched_branches, status) on surviving rows
+ * are preserved. Only rows tagged with THIS installation are pruned/deduped, so
+ * repos served by another installation are left untouched.
+ */
+export async function reconcileInstallationProjects(
+  ownerId: string,
+  installationId: string,
+  granted: Array<{ fullName: string; id?: string | null; defaultBranch?: string | null }>,
+): Promise<ReconcileResult> {
+  const instId = String(installationId);
+  const all = await listProjects(ownerId);
+  const grantedByRepo = new Map(granted.map((g) => [g.fullName, g]));
+  const result: ReconcileResult = { added: 0, updated: 0, removed: 0, deduped: 0 };
+
+  // Group this installation's rows by repo to collapse duplicates.
+  const byRepo = new Map<string, Project[]>();
+  for (const p of all) {
+    if (p.installation_id !== instId) continue;
+    (byRepo.get(p.repo) ?? byRepo.set(p.repo, []).get(p.repo)!).push(p);
+  }
+
+  const survivors = new Map<string, Project>();
+  for (const [repo, rows] of byRepo) {
+    const [keep, ...dupes] = [...rows].sort(byCreatedDesc);
+    for (const dup of dupes) {
+      await deleteProject(dup.id);
+      result.deduped += 1;
+    }
+    if (grantedByRepo.has(repo)) {
+      survivors.set(repo, keep);
+    } else {
+      // No longer granted by this installation — drop it.
+      await deleteProject(keep.id);
+      result.removed += 1;
+    }
+  }
+
+  // Update surviving rows whose GitHub metadata drifted.
+  for (const [repo, keep] of survivors) {
+    const g = grantedByRepo.get(repo)!;
+    const patch: Partial<Project> = {};
+    if (g.id && keep.repo_id !== String(g.id)) patch.repo_id = String(g.id);
+    if (g.defaultBranch && keep.default_branch !== g.defaultBranch) {
+      patch.default_branch = g.defaultBranch;
+    }
+    if (Object.keys(patch).length > 0) {
+      await updateProject(keep.id, patch);
+      result.updated += 1;
+    }
+  }
+
+  // Add newly granted repos the owner has no row for (under any installation).
+  const ownedRepos = new Set(all.map((p) => p.repo));
+  for (const g of granted) {
+    if (ownedRepos.has(g.fullName) || survivors.has(g.fullName)) continue;
+    await createProject({
+      owner_id: ownerId,
+      repo: g.fullName,
+      repo_id: g.id ? String(g.id) : null,
+      installation_id: instId,
+      default_branch: g.defaultBranch ?? null,
+      watched_branches: [],
+      auto_review: true,
+    });
+    result.added += 1;
+  }
+
+  return result;
 }
 
 // ── reviews ─────────────────────────────────────────────────────────────────

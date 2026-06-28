@@ -4,16 +4,22 @@
   "private": true,
   "type": "module",
   "scripts": {
-    "dev": "next dev",
+    "dev": "node scripts/dev.mjs",
+    "dev:next": "next dev",
     "build": "next build",
     "start": "next start",
     "typecheck": "tsc --noEmit",
     "lemma:setup": "tsx scripts/lemma-setup.ts",
+    "reconcile": "node --env-file=.env.local --import tsx scripts/reconcile-projects.ts",
     "simulate": "tsx scripts/simulate-pr.ts"
   },
   "dependencies": {
     "@anthropic-ai/sdk": "^0.106.0",
     "@clerk/nextjs": "^7.5.9",
+<<<<<<< HEAD
+=======
+    "dotenv": "^17.4.2",
+>>>>>>> 60509d3 (fixed the github integration redirect issues and the lemma setup completely activated)
     "framer-motion": "^12.42.0",
     "lemma-sdk": "^0.5.2",
     "next": "^15.5.4",
@@ -27,6 +33,7 @@
     "@types/node": "^22.10.0",
     "@types/react": "^19.0.0",
     "@types/react-dom": "^19.0.0",
+    "smee-client": "^5.0.0",
     "tsx": "^4.19.2",
     "typescript": "^5.7.2"
   }

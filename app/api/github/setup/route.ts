@@ -11,7 +11,7 @@
 import { NextResponse } from "next/server";
 import { auth } from "@clerk/nextjs/server";
 import { listInstallationRepos } from "@/lib/github";
-import { createProject, listProjects } from "@/lib/lemma";
+import { reconcileInstallationProjects } from "@/lib/lemma";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -29,27 +29,20 @@ export async function GET(request: Request) {
   }
 
   try {
+    // Reconcile against what the App actually grants: import new repos, prune
+    // repos the install no longer covers, and collapse any duplicate rows. This
+    // keeps the dashboard's "connected" list truthful even after a user narrows
+    // or widens the App's repository access on GitHub.
     const repos = await listInstallationRepos(installationId);
-    const existing = await listProjects(userId);
-    const have = new Set(existing.map((p) => p.repo));
+    const { added, removed, deduped } = await reconcileInstallationProjects(
+      userId,
+      installationId,
+      repos,
+    );
 
-    let added = 0;
-    for (const repo of repos) {
-      if (have.has(repo.fullName)) continue;
-      await createProject({
-        owner_id: userId,
-        repo: repo.fullName,
-        repo_id: repo.id,
-        installation_id: installationId,
-        default_branch: repo.defaultBranch,
-        watched_branches: [], // empty = watch all base branches by default
-        auto_review: true,
-      });
-      added += 1;
-    }
-
+    const synced = removed + deduped;
     return NextResponse.redirect(
-      new URL(`/dashboard/projects?connected=${added}`, request.url),
+      new URL(`/dashboard/projects?connected=${added}&synced=${synced}`, request.url),
     );
   } catch (error) {
     const msg = encodeURIComponent((error as Error).message);
