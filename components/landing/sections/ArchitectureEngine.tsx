@@ -220,7 +220,7 @@ export function ArchitectureEngine() {
         </div>
       </div>
 
-      <style jsx>{`
+      <style jsx global>{`
         .ln-eng {
           position: relative;
           overflow: hidden;
@@ -329,6 +329,67 @@ export function ArchitectureEngine() {
           backdrop-filter: blur(26px) saturate(140%);
           -webkit-backdrop-filter: blur(26px) saturate(140%);
           box-shadow: var(--ln-shadow-lg);
+          overflow: hidden;
+          transition: transform 0.4s var(--ln-ease-spring),
+            box-shadow 0.4s var(--ln-ease-out), border-color 0.4s var(--ln-ease-out);
+        }
+
+        /* animated accent border ring that traces the frame */
+        .ln-eng__art-frame::before {
+          content: "";
+          position: absolute;
+          inset: -1px;
+          border-radius: inherit;
+          padding: 1px;
+          background: conic-gradient(
+            from var(--ln-eng-angle, 0deg),
+            transparent 0deg,
+            color-mix(in srgb, var(--row-accent) 85%, transparent) 60deg,
+            transparent 160deg,
+            transparent 360deg
+          );
+          -webkit-mask: linear-gradient(#000 0 0) content-box, linear-gradient(#000 0 0);
+          mask: linear-gradient(#000 0 0) content-box, linear-gradient(#000 0 0);
+          -webkit-mask-composite: xor;
+          mask-composite: exclude;
+          opacity: 0;
+          transition: opacity 0.4s var(--ln-ease-out);
+          animation: ln-eng-rotate 6s linear infinite;
+        }
+
+        /* faint dotted texture inside the frame */
+        .ln-eng__art-frame::after {
+          content: "";
+          position: absolute;
+          inset: 0;
+          background-image: radial-gradient(var(--ln-line-soft) 1px, transparent 1px);
+          background-size: 22px 22px;
+          -webkit-mask-image: radial-gradient(ellipse 70% 70% at 50% 50%, #000, transparent 75%);
+          mask-image: radial-gradient(ellipse 70% 70% at 50% 50%, #000, transparent 75%);
+          opacity: 0.5;
+          pointer-events: none;
+        }
+
+        .ln-eng__row:hover .ln-eng__art-frame {
+          transform: translateY(-6px);
+          border-color: color-mix(in srgb, var(--row-accent) 45%, var(--ln-line-strong));
+          box-shadow: var(--ln-shadow-xl), 0 0 40px var(--row-glow);
+        }
+
+        .ln-eng__row:hover .ln-eng__art-frame::before {
+          opacity: 1;
+        }
+
+        @property --ln-eng-angle {
+          syntax: "<angle>";
+          inherits: false;
+          initial-value: 0deg;
+        }
+
+        @keyframes ln-eng-rotate {
+          to {
+            --ln-eng-angle: 360deg;
+          }
         }
 
         .ln-eng__art-svg {
@@ -357,11 +418,33 @@ export function ArchitectureEngine() {
           fill: var(--ln-glass-hi);
           stroke: color-mix(in srgb, var(--row-accent) 50%, var(--ln-line-strong));
           stroke-width: 1.5;
+          transform-box: fill-box;
+          transform-origin: center;
+          animation: ln-eng-node-pulse 3.2s var(--ln-ease-in-out) infinite;
         }
+        .ln-eng__nodes circle:nth-child(2) { animation-delay: 0.3s; }
+        .ln-eng__nodes circle:nth-child(3) { animation-delay: 0.6s; }
+        .ln-eng__nodes circle:nth-child(4) { animation-delay: 0.9s; }
         .ln-eng__node--hot {
           fill: color-mix(in srgb, var(--row-accent) 22%, transparent);
           stroke: var(--row-accent);
           filter: drop-shadow(0 0 12px var(--row-glow));
+          animation: ln-eng-hot-pulse 2.4s var(--ln-ease-in-out) infinite;
+        }
+
+        @keyframes ln-eng-node-pulse {
+          0%, 100% { opacity: 0.7; }
+          50% { opacity: 1; }
+        }
+        @keyframes ln-eng-hot-pulse {
+          0%, 100% {
+            filter: drop-shadow(0 0 8px var(--row-glow));
+            transform: scale(1);
+          }
+          50% {
+            filter: drop-shadow(0 0 18px var(--row-glow));
+            transform: scale(1.12);
+          }
         }
 
         /* conversational chat */

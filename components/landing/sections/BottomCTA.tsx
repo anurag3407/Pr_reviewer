@@ -66,7 +66,7 @@ export function BottomCTA() {
         </motion.div>
       </div>
 
-      <style jsx>{`
+      <style jsx global>{`
         .ln-bottom-cta {
           position: relative;
           overflow: hidden;
@@ -166,15 +166,44 @@ export function BottomCTA() {
           transform: translateY(-2px);
         }
 
+        .ln-bottom-cta__btn {
+          position: relative;
+          overflow: hidden;
+          isolation: isolate;
+        }
+
         .ln-bottom-cta__btn--primary {
           color: #0a0712;
           font-weight: 700;
-          background: linear-gradient(135deg, var(--ln-accent-violet-bright), var(--ln-accent-violet));
-          box-shadow: 0 8px 28px var(--ln-accent-glow);
+          background: linear-gradient(
+            120deg,
+            var(--ln-accent-violet-bright),
+            var(--ln-accent-violet) 55%,
+            var(--ln-accent-cyan)
+          );
+          background-size: 180% 180%;
+          box-shadow: 0 8px 28px var(--ln-accent-glow), inset 0 1px 0 rgba(255, 255, 255, 0.4);
+          animation: ln-gradient-pan 7s var(--ln-ease-in-out) infinite;
+        }
+
+        .ln-bottom-cta__btn--primary::before {
+          content: "";
+          position: absolute;
+          inset: 0;
+          z-index: -1;
+          background: linear-gradient(
+            110deg,
+            transparent 25%,
+            rgba(255, 255, 255, 0.5) 50%,
+            transparent 75%
+          );
+          background-size: 220% 100%;
+          background-position: -160% 0;
+          animation: ln-shimmer 4s var(--ln-ease-in-out) infinite;
         }
 
         .ln-bottom-cta__btn--primary:hover {
-          box-shadow: 0 12px 40px var(--ln-accent-glow);
+          box-shadow: 0 16px 44px var(--ln-accent-glow), inset 0 1px 0 rgba(255, 255, 255, 0.45);
         }
 
         .ln-bottom-cta__btn--secondary {

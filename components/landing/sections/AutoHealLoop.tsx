@@ -298,7 +298,7 @@ export function AutoHealLoop() {
         </motion.div>
       </div>
 
-      <style jsx>{`
+      <style jsx global>{`
         .ln-loop {
           position: relative;
           overflow: hidden;
