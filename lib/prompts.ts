@@ -78,6 +78,31 @@ OUTPUT FORMAT — respond with a SINGLE JSON object and nothing else (no markdow
   "note": "one-line summary of what you changed"
 }`;
 
+/**
+ * Render the ReAct tool-use protocol appended to CHAT_SYSTEM. Provider-agnostic:
+ * the model requests a tool by replying with a single JSON object; the server
+ * executes it and feeds back a TOOL RESULT. Works identically on MiMo (Bynara)
+ * and the Anthropic fallback — no native function-calling required. Returns ""
+ * when no tools are available (degrades to a plain chat completion).
+ */
+export function buildToolProtocol(
+  tools: Array<{ name: string; description: string; args: string }>,
+  maxSteps: number,
+): string {
+  if (tools.length === 0) return "";
+  const list = tools.map((t) => `- ${t.name}: ${t.description}. args: ${t.args}`).join("\n");
+  return [
+    "TOOLS — you can inspect the repository before answering, so never guess at code you can read.",
+    'To call a tool, reply with ONLY this JSON and nothing else: {"tool":"<name>","args":{...}}',
+    "Available tools:",
+    list,
+    `You may call tools at most ${maxSteps} times total; after each you receive a "TOOL RESULT" message.`,
+    "Do NOT invent file paths — call list_files to discover real paths, then read_file to read them.",
+    "Ground every statement in file contents you actually read; never fabricate functions, types, or APIs.",
+    "When you have enough information, STOP calling tools and reply with your final answer as normal markdown prose (not JSON).",
+  ].join("\n");
+}
+
 /** Wrap the packed context into the review user message. */
 export function buildReviewUserPrompt(contextText: string): string {
   return (
