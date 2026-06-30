@@ -15,6 +15,7 @@
   },
   "dependencies": {
     "@anthropic-ai/sdk": "^0.106.0",
+    "@aws-sdk/client-ssm": "^3.1076.0",
     "@clerk/nextjs": "^7.5.9",
     "dotenv": "^17.4.2",
     "framer-motion": "^12.42.0",

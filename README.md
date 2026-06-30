@@ -37,9 +37,11 @@ npm install
 cp .env.example .env.local      # then fill it in (see below)
 ```
 
-**1. Lemma (state).** `lemma auth login` for a token (it **expires** — re-run when
-reviews stall with an auth error), `lemma pod create` for a pod id. Put both in
-`.env.local`, then provision the tables (idempotent, additive):
+**1. Lemma (state).** `lemma auth login` (on Linux/macOS) writes a `refresh_token`
+to `~/.lemma/config.json`; put it in `.env.local` as `LEMMA_REFRESH_TOKEN`. The
+server self-renews the 1-hour access token from it (see `lib/lemma-auth.ts`), so
+you no longer re-run login when reviews stall. `lemma pod create` gives the pod
+id (`LEMMA_POD_ID`). Then provision the tables (idempotent, additive):
 
 ```bash
 node --env-file=.env.local --import tsx scripts/lemma-setup.ts   # or: npm run lemma:setup
@@ -120,9 +122,13 @@ See `.env.example` for the full list. Key knobs: `REVIEW_MODEL`
 
 ## Notes
 
-- **Lemma token expires** — refresh `LEMMA_TOKEN` via `lemma auth login` when the
-  dashboard shows a state-pod auth error.
-- **Fire-and-forget** review/fix loops need a long-running Node host; serverless
-  may cut off background work mid-loop.
+- **Lemma auth self-renews** — the 1-hour access token is refreshed automatically
+  from `LEMMA_REFRESH_TOKEN` (`lib/lemma-auth.ts`), so the server doesn't 401 on
+  expiry. For a long-running deploy where the refresh token may rotate, set
+  `LEMMA_SSM_REFRESH_PARAM` to an AWS SSM Parameter Store name so the rotated
+  token is persisted and reloaded across restarts.
+- **Fire-and-forget** review/fix loops need a long-running Node host (App Runner /
+  Fargate / EC2 — **not** Lambda or Amplify, which cut off background work after
+  the HTTP response).
 - Fixes commit to the contributor's **head branch** (a deliberate choice so the
   same PR re-scans to SAFE); the commit is attributed to the GitHub App bot.

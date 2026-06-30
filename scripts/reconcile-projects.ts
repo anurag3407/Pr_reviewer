@@ -25,7 +25,7 @@ import {
 } from "@/lib/lemma";
 
 async function ownersForInstallation(installationId: string): Promise<string[]> {
-  const res = await lemma().records.list(TABLES.projects, { limit: 500 });
+  const res = await (await lemma()).records.list(TABLES.projects, { limit: 500 });
   const owners = new Set<string>();
   for (const row of (res.items ?? []) as Array<Record<string, any>>) {
     if (String(row.installation_id) === installationId && row.owner_id) {

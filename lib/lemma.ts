@@ -2,18 +2,21 @@
  * lib/lemma.ts — single source of truth for talking to the live Lemma pod.
  *
  * State layer = a real PostgreSQL-backed Lemma pod. We read/write through the
- * official `lemma-sdk` `LemmaClient` with a server-side bearer token
- * (`LEMMA_TOKEN`). One service token drives ALL tenants; isolation is enforced
- * at the application layer by an `owner_id` (Clerk user id) column on every row
- * — every accessor here filters/sets it. Never import this client-side.
+ * official `lemma-sdk` `LemmaClient` with a server-side bearer token (an
+ * auto-refreshed access token — see `lib/lemma-auth.ts`). One service identity
+ * drives ALL tenants; isolation is enforced at the application layer by an
+ * `owner_id` (Clerk user id) column on every row — every accessor here
+ * filters/sets it. Never import this client-side.
  *
  * ── Why the TokenAuth shim ──────────────────────────────────────────────────
  * `lemma-sdk`'s `AuthManager` only injects a bearer from the browser
  * (`localStorage["lemma_token"]`); in Node it falls back to cookie auth, which
  * doesn't exist server-side, and there is no `token` config field. So we
- * subclass `AuthManager` to force "token mode" (`isTokenMode → true`,
- * `getBearerToken → LEMMA_TOKEN`) — exactly what the generated request layer
- * reads (`OpenAPI.TOKEN = auth.getBearerToken()`).
+ * subclass `AuthManager` to force "token mode" (`isTokenMode → true`) and read
+ * the bearer from `lib/lemma-auth.ts`, which keeps a short-lived access token
+ * fresh by renewing it from a long-lived refresh token (see that file) — so the
+ * deployed server never 401s on token expiry. This is exactly what the
+ * generated request layer reads (`OpenAPI.TOKEN = auth.getBearerToken()`).
  *
  * ── Tenancy & joins ─────────────────────────────────────────────────────────
  * We scope reads by listing a table and filtering by `owner_id` in memory
@@ -23,6 +26,7 @@
  */
 
 import { LemmaClient, AuthManager } from "lemma-sdk";
+import { authConfigured, currentAccessToken, ensureAccessToken } from "./lemma-auth";
 import type {
   ChatMessage,
   Finding,
@@ -46,16 +50,15 @@ export const TABLES = {
   chat: "chat_messages",
 } as const;
 
-/** Force the SDK into headless bearer-token mode (see file header). */
+/** Force the SDK into headless bearer-token mode (see file header). The bearer
+ *  is read live from the auto-refreshing token manager, never captured — so the
+ *  singleton client always sends the freshest access token. */
 class TokenAuth extends AuthManager {
-  constructor(apiUrl: string, authUrl: string, private readonly token: string) {
-    super(apiUrl, authUrl);
-  }
   override get isTokenMode(): boolean {
     return true;
   }
   override getBearerToken(): string {
-    return this.token;
+    return currentAccessToken();
   }
   override getRequestInit(init: RequestInit = {}): RequestInit {
     return {
@@ -65,7 +68,7 @@ class TokenAuth extends AuthManager {
         "Content-Type": "application/json",
         Accept: "application/json",
         ...(init.headers as Record<string, string> | undefined),
-        Authorization: `Bearer ${this.token}`,
+        Authorization: `Bearer ${currentAccessToken()}`,
       },
     };
   }
@@ -76,19 +79,23 @@ function requireEnv(name: string): string {
   if (!value) {
     throw new Error(
       `[lemma] Missing ${name}. The state layer is a live Lemma pod — set ` +
-        `LEMMA_TOKEN and LEMMA_POD_ID in .env.local (see README / .env.example).`,
+        `${name} in .env.local (see README / .env.example).`,
     );
   }
   return value;
 }
 
 let _client: LemmaClient | null = null;
-/** Lazy singleton, pod-scoped client. Server-only — never import client-side. */
-export function lemma(): LemmaClient {
+/**
+ * Lazy singleton, pod-scoped client. Awaits a fresh access token before
+ * returning, so every call sends a non-expired bearer (the auth shim reads the
+ * token live). Server-only — never import client-side.
+ */
+export async function lemma(): Promise<LemmaClient> {
+  await ensureAccessToken();
   if (_client) return _client;
-  const token = requireEnv("LEMMA_TOKEN");
   const podId = requireEnv("LEMMA_POD_ID");
-  const auth = new TokenAuth(API_URL, AUTH_URL, token);
+  const auth = new TokenAuth(API_URL, AUTH_URL);
   _client = new LemmaClient({ apiUrl: API_URL, authUrl: AUTH_URL, podId }, { authManager: auth });
   return _client;
 }
@@ -98,14 +105,14 @@ export function lemmaConfig() {
   return {
     apiUrl: API_URL,
     podId: process.env.LEMMA_POD_ID ?? null,
-    configured: Boolean(process.env.LEMMA_TOKEN && process.env.LEMMA_POD_ID),
+    configured: Boolean(process.env.LEMMA_POD_ID && authConfigured()),
   };
 }
 
 /** Cheap reachability probe — lists one table. */
 export async function healthcheck(): Promise<{ ok: boolean; error?: string }> {
   try {
-    await lemma().tables.list({ limit: 1 });
+    await (await lemma()).tables.list({ limit: 1 });
     return { ok: true };
   } catch (error) {
     return { ok: false, error: (error as Error).message };
@@ -232,7 +239,7 @@ async function listRows(
   table: string,
   opts: { limit?: number; sortField?: string; direction?: "asc" | "desc" } = {},
 ): Promise<Row[]> {
-  const res = await lemma().records.list(table, {
+  const res = await (await lemma()).records.list(table, {
     limit: opts.limit ?? 500,
     sort: [{ field: opts.sortField ?? "created_at", direction: opts.direction ?? "desc" }],
   });
@@ -241,7 +248,7 @@ async function listRows(
 
 // ── projects ────────────────────────────────────────────────────────────────
 export async function createProject(input: NewProject): Promise<Project> {
-  const row = await lemma().records.create(TABLES.projects, clean({
+  const row = await (await lemma()).records.create(TABLES.projects, clean({
     owner_id: input.owner_id,
     repo: input.repo,
     repo_id: input.repo_id ?? null,
@@ -261,18 +268,18 @@ export async function listProjects(ownerId: string): Promise<Project[]> {
 
 /** Get a project, asserting it belongs to `ownerId` (returns null otherwise). */
 export async function getProject(id: string, ownerId: string): Promise<Project | null> {
-  const row = await lemma().records.get(TABLES.projects, id).catch(() => null);
+  const row = await (await lemma()).records.get(TABLES.projects, id).catch(() => null);
   if (!row) return null;
   const project = toProject(row as Row);
   return project.owner_id === ownerId ? project : null;
 }
 
 export async function updateProject(id: string, patch: Partial<Project>): Promise<void> {
-  await lemma().records.update(TABLES.projects, id, clean(patch as Row));
+  await (await lemma()).records.update(TABLES.projects, id, clean(patch as Row));
 }
 
 export async function deleteProject(id: string): Promise<void> {
-  await lemma().records.delete(TABLES.projects, id);
+  await (await lemma()).records.delete(TABLES.projects, id);
 }
 
 /** True when a project row is eligible to drive an automatic review. */
@@ -400,7 +407,7 @@ export async function reconcileInstallationProjects(
 
 // ── reviews ─────────────────────────────────────────────────────────────────
 export async function createReview(input: NewReview): Promise<Review> {
-  const row = await lemma().records.create(TABLES.reviews, clean({
+  const row = await (await lemma()).records.create(TABLES.reviews, clean({
     owner_id: input.owner_id,
     project_id: input.project_id,
     repo: input.repo,
@@ -418,7 +425,7 @@ export async function createReview(input: NewReview): Promise<Review> {
 }
 
 export async function getReview(id: string): Promise<Review | null> {
-  const row = await lemma().records.get(TABLES.reviews, id).catch(() => null);
+  const row = await (await lemma()).records.get(TABLES.reviews, id).catch(() => null);
   return row ? toReview(row as Row) : null;
 }
 
@@ -442,7 +449,7 @@ export async function findReviewByPr(projectId: string, prNumber: string): Promi
 }
 
 export async function updateReview(id: string, patch: Partial<Review>): Promise<void> {
-  await lemma().records.update(TABLES.reviews, id, clean(patch as Row));
+  await (await lemma()).records.update(TABLES.reviews, id, clean(patch as Row));
 }
 
 /** Read-modify-write bump of the scan counter; returns the new value. */
@@ -455,7 +462,7 @@ export async function incrementScan(id: string): Promise<number> {
 
 // ── findings ────────────────────────────────────────────────────────────────
 export async function addFinding(finding: NewFinding): Promise<Finding> {
-  const row = await lemma().records.create(TABLES.findings, clean({
+  const row = await (await lemma()).records.create(TABLES.findings, clean({
     owner_id: finding.owner_id ?? "",
     review_id: finding.review_id ?? "",
     scan: finding.scan ?? 1,
@@ -479,25 +486,26 @@ export async function listFindings(reviewId: string): Promise<Finding[]> {
 }
 
 export async function getFinding(id: string): Promise<Finding | null> {
-  const row = await lemma().records.get(TABLES.findings, id).catch(() => null);
+  const row = await (await lemma()).records.get(TABLES.findings, id).catch(() => null);
   return row ? toFinding(row as Row) : null;
 }
 
 export async function updateFinding(id: string, patch: Partial<Finding>): Promise<void> {
-  await lemma().records.update(TABLES.findings, id, clean(patch as Row));
+  await (await lemma()).records.update(TABLES.findings, id, clean(patch as Row));
 }
 
 /** Wipe a review's findings before persisting a fresh scan (current-state model). */
 export async function clearFindings(reviewId: string): Promise<void> {
   const existing = await listFindings(reviewId);
+  const client = await lemma();
   await Promise.all(
-    existing.map((f) => lemma().records.delete(TABLES.findings, f.id).catch(() => {})),
+    existing.map((f) => client.records.delete(TABLES.findings, f.id).catch(() => {})),
   );
 }
 
 // ── chat ────────────────────────────────────────────────────────────────────
 export async function addChatMessage(msg: NewChatMessage): Promise<ChatMessage> {
-  const row = await lemma().records.create(TABLES.chat, clean({
+  const row = await (await lemma()).records.create(TABLES.chat, clean({
     owner_id: msg.owner_id,
     review_id: msg.review_id,
     finding_id: msg.finding_id ?? null,
@@ -543,10 +551,10 @@ export async function getReviewWithFindings(
 
 // ── table provisioning (scripts/lemma-setup.ts) ─────────────────────────────
 export async function listTableNames(): Promise<string[]> {
-  const res = await lemma().tables.list({ limit: 200 });
+  const res = await (await lemma()).tables.list({ limit: 200 });
   return ((res.items ?? []) as Array<{ name?: string }>).map((t) => t.name ?? "").filter(Boolean);
 }
 
 export async function createTable(payload: unknown): Promise<void> {
-  await lemma().tables.create(payload as Parameters<LemmaClient["tables"]["create"]>[0]);
+  await (await lemma()).tables.create(payload as Parameters<LemmaClient["tables"]["create"]>[0]);
 }

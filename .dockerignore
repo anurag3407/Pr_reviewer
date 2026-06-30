@@ -1,0 +1,14 @@
+node_modules
+.next
+.git
+.env*
+!.env.example
+.clerk
+npm-debug.log*
+*.md
+session.md
+plan.md
+.vscode
+.idea
+Dockerfile
+.dockerignore
