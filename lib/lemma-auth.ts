@@ -13,15 +13,31 @@
  *     access token is always valid and the site never goes down on expiry,
  *   • survives refresh-token ROTATION: if a refresh returns a new refresh token
  *     it is persisted to a durable store so a container restart still has a live
- *     credential. The store is pluggable:
+ *     credential. This matters because Lemma/SuperTokens ROTATES the refresh
+ *     token on every refresh and treats reuse of an already-rotated token as
+ *     `token theft detected` — it then revokes the whole session family. So a
+ *     restart that replays the stale env seed hard-fails with a 401 forever
+ *     until you re-login. The store is pluggable (checked in priority order):
  *       - `LEMMA_SSM_REFRESH_PARAM` set → AWS SSM Parameter Store (SecureString):
  *         read the latest token on cold start, write the rotated one back. This
  *         is the production path on App Runner.
+ *       - `LEMMA_REFRESH_TOKEN_FILE` set → a JSON file on a mounted volume. This
+ *         is the path for a single Docker container on EC2 (no AWS SDK/IAM
+ *         needed): mount a volume, point this at a file inside it, and rotated
+ *         tokens survive `docker run`/recreate and image rebuilds.
  *       - otherwise → fall back to the `LEMMA_REFRESH_TOKEN` env var (fine for
  *         local dev and for tokens that don't rotate).
  *
+ *     Both durable stores tag the persisted token with a fingerprint of the
+ *     current env seed. On load, a stored token is trusted only if that
+ *     fingerprint still matches — so re-running `lemma auth login` and updating
+ *     `LEMMA_REFRESH_TOKEN` automatically supersedes a stale stored token
+ *     instead of replaying it into another theft-detection lockout.
+ *
  * Server-only — never import client-side (it would leak the refresh token).
  */
+
+import { createHash } from "node:crypto";
 
 const API_URL = process.env.LEMMA_API_URL ?? "https://api.lemma.work";
 const REFRESH_PATH = "/auth/cli/refresh";
@@ -55,6 +71,17 @@ function accessTokenStale(): boolean {
 }
 
 // ── durable refresh-token store (pluggable) ─────────────────────────────────
+/**
+ * Short fingerprint of the current `LEMMA_REFRESH_TOKEN` env seed. Persisted
+ * alongside a rotated token so we can tell whether the operator has since
+ * re-seeded (via `lemma auth login`). If they have, the stored token is stale
+ * and must NOT be replayed — doing so re-triggers theft detection.
+ */
+function seedFingerprint(): string {
+  const seed = process.env.LEMMA_REFRESH_TOKEN?.trim() || "";
+  return createHash("sha256").update(seed).digest("hex").slice(0, 16);
+}
+
 async function ssmGet(name: string): Promise<string | null> {
   const { SSMClient, GetParameterCommand } = await import("@aws-sdk/client-ssm");
   const client = new SSMClient({});
@@ -70,7 +97,45 @@ async function ssmPut(name: string, value: string): Promise<void> {
   );
 }
 
-/** Load the freshest refresh token: SSM if configured, else the env seed. */
+/**
+ * File store on a mounted volume. Envelope: `{ seed, token }`, where `seed` is
+ * the fingerprint of the env seed the rotated `token` descends from. Returns the
+ * token only when that fingerprint still matches the current env seed, so a
+ * re-login (which changes `LEMMA_REFRESH_TOKEN`) transparently invalidates it.
+ */
+async function fileGet(): Promise<string | null> {
+  const path = process.env.LEMMA_REFRESH_TOKEN_FILE?.trim();
+  if (!path) return null;
+  try {
+    const { readFile } = await import("node:fs/promises");
+    const parsed = JSON.parse(await readFile(path, "utf8")) as { seed?: string; token?: string };
+    const token = parsed.token?.trim();
+    if (token && parsed.seed === seedFingerprint()) return token;
+    return null; // missing token, or stale (env re-seeded) → ignore.
+  } catch {
+    // File absent on first boot, or unreadable/corrupt — fall through to the
+    // env seed so the very first boot can still authenticate.
+    return null;
+  }
+}
+
+/** Atomically write the rotated token + current seed fingerprint to the file. */
+async function filePut(token: string): Promise<void> {
+  const path = process.env.LEMMA_REFRESH_TOKEN_FILE?.trim();
+  if (!path) return;
+  try {
+    const { writeFile, rename, mkdir } = await import("node:fs/promises");
+    const { dirname } = await import("node:path");
+    await mkdir(dirname(path), { recursive: true });
+    const tmp = `${path}.tmp`;
+    await writeFile(tmp, JSON.stringify({ seed: seedFingerprint(), token }), { mode: 0o600 });
+    await rename(tmp, path); // atomic swap — a crash can't leave a half-written file.
+  } catch (error) {
+    console.error(`[lemma-auth] refresh-token file write failed: ${(error as Error).message}`);
+  }
+}
+
+/** Load the freshest refresh token: SSM → file → env seed (first hit wins). */
 async function loadRefreshToken(): Promise<string | null> {
   const param = process.env.LEMMA_SSM_REFRESH_PARAM?.trim();
   if (param) {
@@ -78,25 +143,30 @@ async function loadRefreshToken(): Promise<string | null> {
       const fromSsm = await ssmGet(param);
       if (fromSsm) return fromSsm;
     } catch (error) {
-      // Cold start with no param yet, or transient SSM error — fall through to
-      // the env seed so the very first boot can still authenticate.
-      console.error(`[lemma-auth] SSM read failed, using env seed: ${(error as Error).message}`);
+      // Cold start with no param yet, or transient SSM error — fall through.
+      console.error(`[lemma-auth] SSM read failed, trying file/env seed: ${(error as Error).message}`);
     }
   }
+  const fromFile = await fileGet();
+  if (fromFile) return fromFile;
   return process.env.LEMMA_REFRESH_TOKEN?.trim() || null;
 }
 
 /** Persist a rotated refresh token so the next cold start has a live credential. */
 async function persistRefreshToken(token: string): Promise<void> {
   const param = process.env.LEMMA_SSM_REFRESH_PARAM?.trim();
-  if (!param) return; // env-only mode: nothing durable to write to.
-  try {
-    await ssmPut(param, token);
-  } catch (error) {
-    // Don't fail the request — the in-memory token still works for this
-    // instance's lifetime; only restart durability is at risk.
-    console.error(`[lemma-auth] SSM write failed (rotated token not persisted): ${(error as Error).message}`);
+  if (param) {
+    try {
+      await ssmPut(param, token);
+      return;
+    } catch (error) {
+      // Don't fail the request — the in-memory token still works for this
+      // instance's lifetime; only restart durability is at risk. Still try the
+      // file store below as a fallback if one is configured.
+      console.error(`[lemma-auth] SSM write failed (rotated token not persisted): ${(error as Error).message}`);
+    }
   }
+  await filePut(token); // no-op unless LEMMA_REFRESH_TOKEN_FILE is set.
 }
 
 // ── refresh ─────────────────────────────────────────────────────────────────
@@ -180,6 +250,7 @@ export function authConfigured(): boolean {
   return Boolean(
     process.env.LEMMA_TOKEN ||
       process.env.LEMMA_REFRESH_TOKEN ||
+      process.env.LEMMA_REFRESH_TOKEN_FILE ||
       process.env.LEMMA_SSM_REFRESH_PARAM,
   );
 }

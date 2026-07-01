@@ -20,9 +20,13 @@ yarn-debug.log*
 yarn-error.log*
 
 # env
-.env
+.env 
 .env.local
 .env*.local
+
+# lemma rotating refresh-token store (secret; see lib/lemma-auth.ts)
+.lemma-refresh.json
+.lemma-refresh.json.tmp
 
 # typescript
 *.tsbuildinfo

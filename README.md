@@ -124,9 +124,20 @@ See `.env.example` for the full list. Key knobs: `REVIEW_MODEL`
 
 - **Lemma auth self-renews** — the 1-hour access token is refreshed automatically
   from `LEMMA_REFRESH_TOKEN` (`lib/lemma-auth.ts`), so the server doesn't 401 on
-  expiry. For a long-running deploy where the refresh token may rotate, set
-  `LEMMA_SSM_REFRESH_PARAM` to an AWS SSM Parameter Store name so the rotated
-  token is persisted and reloaded across restarts.
+  expiry. **The refresh token rotates on every use**, and Lemma rejects a reused
+  (already-rotated) token as `token theft detected`, revoking the session — so on
+  a long-running deploy the rotated token **must** be persisted, or a restart
+  replays the stale seed and 401s permanently until you re-run `lemma auth login`.
+  Pick one durable store:
+  - **Single Docker container (EC2):** set `LEMMA_REFRESH_TOKEN_FILE` to a path on
+    a mounted volume, e.g. run with `-v autoheal-data:/data` and
+    `LEMMA_REFRESH_TOKEN_FILE=/data/lemma-refresh.json`. No AWS setup needed.
+  - **App Runner / multi-instance:** set `LEMMA_SSM_REFRESH_PARAM` to an AWS SSM
+    Parameter Store (SecureString) name.
+
+  Both tag the stored token with a fingerprint of the env seed, so re-running
+  `lemma auth login` and updating `LEMMA_REFRESH_TOKEN` automatically supersedes a
+  stale stored token instead of replaying it.
 - **Fire-and-forget** review/fix loops need a long-running Node host (App Runner /
   Fargate / EC2 — **not** Lambda or Amplify, which cut off background work after
   the HTTP response).

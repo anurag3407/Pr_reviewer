@@ -41,6 +41,15 @@ RUN addgroup --system --gid 1001 nodejs && adduser --system --uid 1001 nextjs
 COPY --from=builder /app/public ./public
 COPY --from=builder --chown=nextjs:nodejs /app/.next/standalone ./
 COPY --from=builder --chown=nextjs:nodejs /app/.next/static ./.next/static
+
+# Durable state for the rotating Lemma refresh token (LEMMA_REFRESH_TOKEN_FILE).
+# Owned by the runtime user so it stays writable, and declared a VOLUME so a
+# rotated token survives `docker run`/recreate and image rebuilds. Mount a named
+# volume here, e.g. `-v autoheal-data:/data`, and set
+# LEMMA_REFRESH_TOKEN_FILE=/data/lemma-refresh.json.
+RUN mkdir -p /data && chown nextjs:nodejs /data
+VOLUME /data
+
 USER nextjs
 EXPOSE 3000
 CMD ["node", "server.js"]
