@@ -44,7 +44,13 @@ function getApp(): App {
   if (_app) return _app;
   if (!githubConfigured()) throw new GitHubNotConfiguredError();
   // PEM may arrive with literal "\n" escapes (single-line .env) — normalize.
-  const privateKey = String(process.env.GITHUB_APP_PRIVATE_KEY).replace(/\\n/g, "\n");
+  // Also strip surrounding quotes: Docker's --env-file/compose env_file keeps
+  // the quotes from `KEY="..."` as part of the value, corrupting the PEM header
+  // and triggering OpenSSL's `1E08010C:DECODER routines::unsupported`.
+  const privateKey = String(process.env.GITHUB_APP_PRIVATE_KEY)
+    .trim()
+    .replace(/^["']|["']$/g, "")
+    .replace(/\\n/g, "\n");
   _app = new App({
     appId: String(process.env.GITHUB_APP_ID),
     privateKey,

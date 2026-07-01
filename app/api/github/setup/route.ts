@@ -19,13 +19,17 @@ export const dynamic = "force-dynamic";
 export async function GET(request: Request) {
   const { userId } = await auth();
   const url = new URL(request.url);
+  // Behind a reverse proxy the standalone server sees its internal bind host
+  // (0.0.0.0:3000), so redirects built from `request.url` leak that to the
+  // browser. Anchor them to the public APP_URL when configured.
+  const base = process.env.APP_URL ?? request.url;
   if (!userId) {
-    return NextResponse.redirect(new URL("/sign-in", request.url));
+    return NextResponse.redirect(new URL("/sign-in", base));
   }
 
   const installationId = url.searchParams.get("installation_id");
   if (!installationId) {
-    return NextResponse.redirect(new URL("/dashboard/projects?error=no_installation", request.url));
+    return NextResponse.redirect(new URL("/dashboard/projects?error=no_installation", base));
   }
 
   try {
@@ -42,10 +46,10 @@ export async function GET(request: Request) {
 
     const synced = removed + deduped;
     return NextResponse.redirect(
-      new URL(`/dashboard/projects?connected=${added}&synced=${synced}`, request.url),
+      new URL(`/dashboard/projects?connected=${added}&synced=${synced}`, base),
     );
   } catch (error) {
     const msg = encodeURIComponent((error as Error).message);
-    return NextResponse.redirect(new URL(`/dashboard/projects?error=${msg}`, request.url));
+    return NextResponse.redirect(new URL(`/dashboard/projects?error=${msg}`, base));
   }
 }
