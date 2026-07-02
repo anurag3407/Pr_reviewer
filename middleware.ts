@@ -18,6 +18,7 @@ const isPublicRoute = createRouteMatcher([
   "/sign-in(.*)",
   "/sign-up(.*)",
   "/api/webhooks(.*)", // GitHub-signed; must stay open
+  "/api/health", // Docker HEALTHCHECK + external monitoring; no secrets exposed
 ]);
 const isApiRoute = createRouteMatcher(["/api/(.*)"]);
 
