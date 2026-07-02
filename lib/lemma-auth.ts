@@ -11,6 +11,11 @@
  *   • refreshes ~60s before expiry (and on demand) via the same endpoint the CLI
  *     uses — `POST {LEMMA_API_URL}/auth/cli/refresh` { refresh_token } — so the
  *     access token is always valid and the site never goes down on expiry,
+ *   • proactively refreshes every 45 minutes in the background (via setInterval)
+ *     so token renewal never waits for an incoming request,
+ *   • retries transient refresh failures with exponential backoff (3 attempts),
+ *   • on unrecoverable failure (token theft / session revoked), exits the process
+ *     so Docker's --restart policy brings the container back with a fresh token,
  *   • survives refresh-token ROTATION: if a refresh returns a new refresh token
  *     it is persisted to a durable store so a container restart still has a live
  *     credential. This matters because Lemma/SuperTokens ROTATES the refresh
@@ -51,6 +56,16 @@ let refreshToken: string | null = null;
 let refreshTokenLoaded = false;
 /** Dedupes concurrent refreshes into a single in-flight request. */
 let inflight: Promise<void> | null = null;
+
+/** ── health tracking (for /api/health + Docker HEALTHCHECK) ──────────────── */
+let isHealthy = true;
+let lastAuthError: string | null = null;
+let consecutiveFailures = 0;
+const MAX_RETRIES = 3;
+const RETRY_BASE_MS = 2_000;
+/** Proactive refresh interval — 45 min, well before the 1h access token expiry. */
+const PROACTIVE_REFRESH_MS = 45 * 60 * 1_000;
+let proactiveTimer: ReturnType<typeof setInterval> | null = null;
 
 /** Milliseconds-until-`exp` epoch from a JWT, or 0 if undecodable. */
 function decodeExpMs(jwt: string): number {
@@ -170,10 +185,18 @@ async function persistRefreshToken(token: string): Promise<void> {
 }
 
 // ── refresh ─────────────────────────────────────────────────────────────────
-async function refresh(): Promise<void> {
+/**
+ * Single refresh attempt with detailed logging. Separated from retry logic so
+ * callers can distinguish transient from unrecoverable failures (token theft).
+ */
+async function refreshOnce(): Promise<void> {
   if (!refreshTokenLoaded) {
     refreshToken = await loadRefreshToken();
     refreshTokenLoaded = true;
+    console.log(
+      `[lemma-auth] refresh token loaded (len=${refreshToken?.length ?? 0}, ` +
+        `source=${refreshToken ? (process.env.LEMMA_REFRESH_TOKEN_FILE ? "file/env" : "env") : "NONE"})`,
+    );
   }
   if (!refreshToken) {
     throw new Error(
@@ -184,6 +207,7 @@ async function refresh(): Promise<void> {
   }
 
   const url = API_URL.replace(/\/$/, "") + REFRESH_PATH;
+  console.log(`[lemma-auth] refreshing access token via ${url}`);
   const res = await fetch(url, {
     method: "POST",
     headers: { "Content-Type": "application/json", Accept: "application/json" },
@@ -191,22 +215,41 @@ async function refresh(): Promise<void> {
   });
   if (!res.ok) {
     const body = await res.text().catch(() => "");
-    throw new Error(`[lemma-auth] refresh failed (${res.status}): ${body.slice(0, 300)}`);
+    console.error(`[lemma-auth] refresh HTTP ${res.status}: ${body.slice(0, 400)}`);
+    const err = new Error(`[lemma-auth] refresh failed (${res.status}): ${body.slice(0, 300)}`);
+    // Tag unrecoverable errors so the retry wrapper can short-circuit.
+    if (body.includes("token theft") || body.includes("INVALID_REFRESH_TOKEN")) {
+      (err as any).unrecoverable = true;
+    }
+    throw err;
   }
 
   const data = (await res.json()) as Record<string, unknown>;
+  console.log(`[lemma-auth] refresh response top-level keys: [${Object.keys(data).join(", ")}]`);
+
   // The CLI stores the session under the response root; tolerate a `session`
   // envelope and a few key spellings.
   const session = (typeof data.session === "object" && data.session
     ? (data.session as Record<string, unknown>)
     : data) as Record<string, unknown>;
+
+  if (data.session && typeof data.session === "object") {
+    console.log(`[lemma-auth] session envelope keys: [${Object.keys(session).join(", ")}]`);
+  }
+
   const newAccess =
     (session.access_token as string) ??
     (session.token as string) ??
     (session.accessToken as string) ??
     null;
+  // Search for the rotated refresh token in both the session envelope AND the
+  // top-level response — covers all known Lemma/SuperTokens response shapes.
   const newRefresh =
-    (session.refresh_token as string) ?? (session.refreshToken as string) ?? null;
+    (session.refresh_token as string) ??
+    (session.refreshToken as string) ??
+    (data.refresh_token as string) ??
+    (data.refreshToken as string) ??
+    null;
 
   if (!newAccess) {
     throw new Error(`[lemma-auth] refresh response missing access token; keys=${Object.keys(data).join(",")}`);
@@ -214,9 +257,111 @@ async function refresh(): Promise<void> {
 
   accessToken = String(newAccess);
   accessExpMs = decodeExpMs(accessToken);
+  console.log(`[lemma-auth] ✅ new access token — expires ${new Date(accessExpMs).toISOString()}`);
+
   if (newRefresh && newRefresh !== refreshToken) {
+    console.log(
+      `[lemma-auth] 🔄 refresh token ROTATED (old len=${refreshToken?.length}, ` +
+        `new len=${newRefresh.length}) — persisting to durable store`,
+    );
     refreshToken = String(newRefresh);
     await persistRefreshToken(refreshToken);
+  } else if (!newRefresh) {
+    // This is the likely ROOT CAUSE of the 1-hour crash: if Lemma rotates the
+    // token server-side but the response doesn't include it under any key we
+    // check, we keep using the old (now-dead) token and get "token theft" on
+    // the next refresh.
+    console.warn(
+      `[lemma-auth] ⚠️  response did NOT include a new refresh token!\n` +
+        `  → response keys: [${Object.keys(data).join(", ")}]\n` +
+        `  → session keys: [${Object.keys(session).join(", ")}]\n` +
+        `  → if Lemma rotated it server-side, the NEXT refresh will fail with token theft`,
+    );
+  } else {
+    console.log("[lemma-auth] refresh token unchanged (no rotation this cycle)");
+  }
+}
+
+/**
+ * Refresh with retry + exponential backoff. Unrecoverable errors (token theft /
+ * session revoked) short-circuit immediately and trigger process.exit(1) so
+ * Docker's --restart policy brings the container back.
+ */
+async function refreshWithRetry(): Promise<void> {
+  for (let attempt = 1; attempt <= MAX_RETRIES; attempt++) {
+    try {
+      await refreshOnce();
+      // Success — reset health tracking.
+      consecutiveFailures = 0;
+      isHealthy = true;
+      lastAuthError = null;
+      return;
+    } catch (error) {
+      const msg = (error as Error).message ?? String(error);
+      console.error(`[lemma-auth] refresh attempt ${attempt}/${MAX_RETRIES} failed: ${msg}`);
+
+      // Token theft / revoked session = unrecoverable within this process.
+      // Exit so Docker's --restart policy brings us back with the latest
+      // persisted token (or a manually-injected fresh one).
+      if ((error as any).unrecoverable) {
+        isHealthy = false;
+        lastAuthError = msg;
+        console.error(
+          "\n[lemma-auth] ❌ SESSION REVOKED (token theft detected).\n" +
+            "  The refresh token chain is broken — Lemma revoked the entire session.\n" +
+            "  → Container will exit in 5 seconds for auto-restart.\n" +
+            "  → If this keeps happening after restart, you need to re-login:\n" +
+            "    1. On your local machine: run `lemma auth login`\n" +
+            "    2. Then run: ./scripts/recover-token.sh <EC2_IP>\n",
+        );
+        setTimeout(() => process.exit(1), 5_000);
+        throw error;
+      }
+
+      // Transient failure — retry with backoff (unless last attempt).
+      if (attempt < MAX_RETRIES) {
+        const delay = RETRY_BASE_MS * Math.pow(2, attempt - 1);
+        console.log(`[lemma-auth] ⏳ retrying in ${delay}ms …`);
+        await new Promise((r) => setTimeout(r, delay));
+      }
+    }
+  }
+  // All retries exhausted — track but don't exit (might be transient).
+  consecutiveFailures++;
+  lastAuthError = `refresh failed after ${MAX_RETRIES} attempts`;
+  isHealthy = consecutiveFailures < 3; // tolerate a few transient blips
+  throw new Error(`[lemma-auth] ${lastAuthError} (consecutive failures: ${consecutiveFailures})`);
+}
+
+/**
+ * Start a proactive background refresh that fires every 45 minutes — well
+ * before the 1-hour access token expiry. This means token renewal never waits
+ * for an incoming request; the token is always fresh when a request arrives.
+ */
+function startProactiveRefresh(): void {
+  if (proactiveTimer) return;
+  console.log("[lemma-auth] 🔁 proactive background refresh started (every 45 min)");
+  proactiveTimer = setInterval(async () => {
+    try {
+      console.log("[lemma-auth] ⏰ proactive refresh triggered");
+      if (!inflight) {
+        inflight = refreshWithRetry().finally(() => {
+          inflight = null;
+        });
+      }
+      await inflight;
+      console.log(
+        `[lemma-auth] ✅ proactive refresh OK — next expiry: ${new Date(accessExpMs).toISOString()}`,
+      );
+    } catch (error) {
+      // Don't crash here — health tracking + process.exit for token theft is
+      // already handled inside refreshWithRetry().
+      console.error(`[lemma-auth] ⚠️ proactive refresh failed: ${(error as Error).message}`);
+    }
+  }, PROACTIVE_REFRESH_MS);
+  // Don't keep the process alive just for this timer.
+  if (typeof proactiveTimer === "object" && proactiveTimer && "unref" in proactiveTimer) {
+    (proactiveTimer as NodeJS.Timeout).unref();
   }
 }
 
@@ -224,8 +369,9 @@ async function refresh(): Promise<void> {
 /** Ensure a non-expired access token, refreshing if needed. Returns it. */
 export async function ensureAccessToken(): Promise<string> {
   if (!accessTokenStale()) return accessToken as string;
-  if (!inflight) inflight = refresh().finally(() => { inflight = null; });
+  if (!inflight) inflight = refreshWithRetry().finally(() => { inflight = null; });
   await inflight;
+  startProactiveRefresh();
   return accessToken as string;
 }
 
@@ -240,7 +386,7 @@ export function currentAccessToken(): string {
 
 /** Force a refresh regardless of expiry (e.g. recovering from a 401). */
 export async function forceRefresh(): Promise<string> {
-  if (!inflight) inflight = refresh().finally(() => { inflight = null; });
+  if (!inflight) inflight = refreshWithRetry().finally(() => { inflight = null; });
   await inflight;
   return accessToken as string;
 }
@@ -253,4 +399,21 @@ export function authConfigured(): boolean {
       process.env.LEMMA_REFRESH_TOKEN_FILE ||
       process.env.LEMMA_SSM_REFRESH_PARAM,
   );
+}
+
+/** Health snapshot for the /api/health endpoint and Docker HEALTHCHECK. */
+export function getAuthHealth(): {
+  healthy: boolean;
+  lastError: string | null;
+  consecutiveFailures: number;
+  accessTokenExpiry: string | null;
+  hasRefreshToken: boolean;
+} {
+  return {
+    healthy: isHealthy,
+    lastError: lastAuthError,
+    consecutiveFailures,
+    accessTokenExpiry: accessExpMs ? new Date(accessExpMs).toISOString() : null,
+    hasRefreshToken: Boolean(refreshToken),
+  };
 }

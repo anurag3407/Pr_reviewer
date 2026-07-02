@@ -52,4 +52,6 @@ VOLUME /data
 
 USER nextjs
 EXPOSE 3000
+HEALTHCHECK --interval=60s --timeout=10s --start-period=60s --retries=3 \
+  CMD node -e 'fetch("http://localhost:3000/api/health").then(r=>{if(!r.ok)process.exit(1)}).catch(()=>process.exit(1))'
 CMD ["node", "server.js"]
