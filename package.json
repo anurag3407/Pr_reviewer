@@ -9,7 +9,9 @@
     "build": "next build",
     "start": "next start",
     "typecheck": "tsc --noEmit",
-    "lemma:setup": "tsx scripts/lemma-setup.ts",
+    "lemma:setup": "node --env-file=.env.local --import tsx scripts/lemma-setup.ts",
+    "lemma:bootstrap": "node --import tsx scripts/lemma-bootstrap.ts",
+    "lemma:verify": "node --env-file=.env.local --import tsx scripts/lemma-verify.ts",
     "reconcile": "node --env-file=.env.local --import tsx scripts/reconcile-projects.ts",
     "simulate": "tsx scripts/simulate-pr.ts"
   },
